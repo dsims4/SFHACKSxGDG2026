@@ -81,3 +81,21 @@ test('homepage keeps the globe and briefing fallback available during a database
     assert.equal(response.template, 'index.njk');
     assert.deepEqual(response.data.topics, []);
 });
+
+test('location articles validate filters and return bounded article pages', async () => {
+    const calls = [];
+    const router = createNewsRouter({ query: async (sql, values) => {
+        calls.push({ sql, values });
+        return { rows: Array.from({ length: 51 }, (_, id) => ({ id: String(id) })) };
+    } });
+    const route = router.stack.find(item => item.route?.path === '/globe/articles');
+    const response = { statusCode: 200, status(code) { this.statusCode = code; return this; }, json(body) { this.body = body; return this; } };
+    const query = { name: 'London', country: 'United Kingdom', level: 'city', lat: '51.5', lng: '-0.12', topic: 'economics', hours: '24' };
+    await route.route.stack[0].handle({ query }, response);
+    assert.equal(response.body.articles.length, 50);
+    assert.equal(response.body.next_offset, 50);
+    assert.deepEqual(calls[0].values.slice(0, 6), ['London', 'United Kingdom', 'city', 51.5, -0.12, 'economics']);
+    await route.route.stack[0].handle({ query: { ...query, lat: '91' } }, response);
+    assert.equal(response.statusCode, 400);
+    assert.equal(calls.length, 1);
+});

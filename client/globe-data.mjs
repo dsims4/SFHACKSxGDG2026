@@ -18,7 +18,7 @@ export function aggregateLocations(rows, topic = 'all') {
         if (!topics.length || (topic !== 'all' && !topics.includes(topic))) continue;
         const key = JSON.stringify([row.name, row.country, row.level, row.lat, row.lng]);
         const location = locations.get(key) || {
-            id: key, name: row.name || row.country || 'Unnamed location', country: row.country || '',
+            id: key, sourceName: row.name || '', name: row.name || row.country || 'Unnamed location', country: row.country || '',
             level: row.level === 'city' ? 'city' : 'country', lat: row.lat, lng: row.lng, count: 0, topics: {}
         };
         location.count += row.count;

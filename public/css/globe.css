@@ -139,3 +139,20 @@
 .hotspot:hover span,
 .hotspot[aria-pressed="true"] span { color: inherit; }
 .status-dot { background: #000; }
+
+/* Monochrome density and a simple location-to-articles panel. */
+.legend-gradient { background: linear-gradient(90deg, #ddd, #000); }
+.is-columns .legend-gradient { background: #333; }
+.globe-body { grid-template-columns: minmax(0, 1fr) minmax(280px, 380px); }
+.globe-sidebar { max-height: 850px; overflow-y: auto; }
+.globe-article-card { margin-top: 1rem; padding: 1rem; }
+.globe-article-card .news-card-title { font-size: 1rem; padding-bottom: 0.75rem; border-bottom: 1px solid #000; }
+.globe-article-card .news-card-meta { font-size: 0.75rem; }
+.globe-article-card .article-topics { font-size: 0.75rem; margin-top: 0.5rem; }
+.globe-article-card .news-card-summary { font-size: 0.85rem; }
+.globe-article-card a:hover { text-decoration: underline; }
+.article-more { margin-top: 1rem; padding: 0.5rem 0.75rem; border: 1px solid #000; background: #fff; color: #000; cursor: pointer; }
+@media (max-width: 760px) {
+    .globe-body { display: block; }
+    .globe-sidebar { display: block; max-height: none; }
+}

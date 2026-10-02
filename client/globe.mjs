@@ -3,14 +3,13 @@ import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import { geoEquirectangular, geoGraticule10, geoPath } from 'd3-geo';
 import { feature, mesh } from 'topojson-client';
 import world from 'world-atlas/countries-110m.json';
-import cities from './data/demo-cities.json';
-import { TOPICS, aggregateLocations, createDensity, demoRows, globePosition } from './globe-data.mjs';
+import { TOPICS, aggregateLocations, createDensity, globePosition } from './globe-data.mjs';
 
 const $ = id => document.getElementById(id);
 const format = new Intl.NumberFormat('en-US');
 const titleCase = text => text.charAt(0).toUpperCase() + text.slice(1);
 const reducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)');
-const state = { rows: [], locations: [], selected: null, mode: 'live', layer: 'heatmap', request: null, renderer: null };
+const state = { rows: [], locations: [], selected: null, articleRequest: null, layer: 'heatmap', request: null, renderer: null };
 
 function element(tag, className, text) {
     const node = document.createElement(tag);
@@ -20,6 +19,7 @@ function element(tag, className, text) {
 }
 
 function showSelection(location) {
+    state.articleRequest?.abort();
     state.selected = location?.id || null;
     state.renderer?.select(location);
     $('globe-location').value = state.selected || '';
@@ -28,15 +28,66 @@ function showSelection(location) {
     panel.replaceChildren(element('p', 'detail-eyebrow', 'A CLOSER LOOK'));
     panel.append(element('h3', '', location?.name || 'A world of perspectives'));
     if (!location) {
-        panel.append(element('p', '', 'Select a hotspot or location to explore its story labels.'));
+        panel.append(element('p', '', 'Select a location to read its articles.'));
         return;
     }
-    panel.append(element('p', '', `${location.country} · ${format.format(location.count)} ${state.mode === 'demo' ? 'sample ' : ''}stories · ${location.level === 'city' ? 'City location' : 'Country-level location'}`));
-    const tags = element('div', 'location-tags');
-    for (const [topic, count] of Object.entries(location.topics).sort((a, b) => b[1] - a[1])) {
-        tags.append(element('span', '', `${titleCase(topic)} ${format.format(count)}`));
+    panel.append(element('p', '', `${location.country} · ${format.format(location.count)} articles`));
+    loadArticles(location);
+
+}
+
+function safeURL(value) {
+    try { const url = new URL(value); return ['http:', 'https:'].includes(url.protocol) ? url.href : null; }
+    catch { return null; }
+}
+
+async function loadArticles(location, offset = 0) {
+    state.articleRequest?.abort();
+    const controller = new AbortController();
+    state.articleRequest = controller;
+    const panel = $('globe-selection');
+    const status = element('p', '', 'Loading articles…');
+    panel.append(status);
+    const params = new URLSearchParams({ name: location.sourceName, country: location.country, level: location.level,
+        lat: location.lat, lng: location.lng, topic: $('globe-topic').value, hours: $('globe-period').value, offset });
+    try {
+        const response = await fetch(`/api/globe/articles?${params}`, { signal: AbortSignal.any([controller.signal, AbortSignal.timeout(15000)]) });
+        if (!response.ok) throw new Error('Articles unavailable');
+        const data = await response.json();
+        if (state.articleRequest !== controller) return;
+        status.remove();
+        for (const article of data.articles) {
+            const card = element('article', 'news-card globe-article-card');
+            const heading = element('h4', 'news-card-title');
+            const link = safeURL(article.link);
+            const title = element(link ? 'a' : 'span', '', article.title || 'Untitled article');
+            if (link) { title.href = link; title.target = '_blank'; title.rel = 'noopener noreferrer'; }
+            heading.append(title);
+            card.append(heading);
+            const date = new Date(article.publication_date);
+            card.append(element('p', 'news-card-meta', `${article.publisher || ''} · ${Number.isNaN(date.getTime()) ? '' : date.toLocaleDateString('en-US', { timeZone: 'UTC' })} UTC`));
+            card.append(element('p', 'article-topics', `Topics: ${(article.topics || []).map(titleCase).join(' · ')}`));
+            const list = element('ul', 'news-card-summary');
+            for (const bullet of article.summary || []) if (typeof bullet === 'string' && bullet.trim()) list.append(element('li', '', bullet));
+            if (list.children.length) card.append(list);
+            const images = element('div', 'article-images');
+            for (const value of (article.images || []).slice(0, 3)) {
+                const url = safeURL(typeof value === 'string' ? value : value?.url);
+                if (!url) continue;
+                const image = element('img'); image.src = url; image.alt = 'Image from the article'; image.loading = 'lazy'; image.referrerPolicy = 'no-referrer';
+                images.append(image);
+            }
+            if (images.children.length) card.append(images);
+            panel.append(card);
+        }
+        if (!data.articles.length && offset === 0) panel.append(element('p', '', 'No articles match these filters.'));
+        if (data.next_offset !== null) {
+            const more = element('button', 'article-more', 'More articles'); more.type = 'button';
+            more.addEventListener('click', () => { more.remove(); loadArticles(location, data.next_offset); }); panel.append(more);
+        }
+    } catch {
+        if (state.articleRequest === controller) status.textContent = 'Could not load articles. Select the location again to retry.';
     }
-    panel.append(tags);
 }
 
 function selectLocation(location) {
@@ -76,41 +127,23 @@ async function loadStories() {
     state.request?.abort();
     const controller = new AbortController();
     state.request = controller;
-    const source = $('globe-source').value;
     $('globe-app').setAttribute('aria-busy', 'true');
-    $('globe-data-status').textContent = source === 'demo' ? 'Illustrative demo' : 'Loading coverage';
-    $('globe-retry').hidden = true;
+    $('globe-data-status').textContent = 'Loading articles';
+    const timeout = setTimeout(() => controller.abort(), 10000);
     let failed = false;
-    let updated = null;
-    const timeout = setTimeout(() => controller.abort('timeout'), 10000);
     try {
-        if (source === 'demo') {
-            state.rows = demoRows(cities, Number($('globe-period').value));
-            state.mode = 'demo';
-        } else {
-            const response = await fetch(`/api/globe?hours=${$('globe-period').value}`, { signal: controller.signal });
-            if (!response.ok) throw new Error('Story feed unavailable');
-            const data = await response.json();
-            if (data.mode !== 'live' || !Array.isArray(data.locations)) throw new Error('Invalid story feed');
-            state.rows = data.locations;
-            state.mode = 'live';
-            updated = new Date(data.end);
-        }
+        const response = await fetch(`/api/globe?hours=${$('globe-period').value}`, { signal: controller.signal });
+        if (!response.ok) throw new Error('Articles unavailable');
+        const data = await response.json();
+        if (!Array.isArray(data.locations)) throw new Error('Invalid locations');
+        state.rows = data.locations;
     } catch {
         if (state.request !== controller) return;
+        state.rows = [];
         failed = true;
-        state.mode = 'demo';
-        state.rows = demoRows(cities, Number($('globe-period').value));
-        $('globe-source').value = 'demo';
-        $('globe-retry').hidden = false;
-    } finally {
-        clearTimeout(timeout);
-    }
+    } finally { clearTimeout(timeout); }
     if (state.request !== controller) return;
-    $('globe-data-status').textContent = state.mode === 'demo' ? 'Illustrative demo' : 'Latest story coverage';
-    $('globe-data-note').textContent = state.mode === 'demo'
-        ? `${failed ? 'Latest stories are unavailable. ' : ''}Sample counts, real geography. These are not current news events.`
-        : `Labeled stories with known locations. Updated ${updated.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}. Locations are inferred from article text; they may not be the event site.`;
+    $('globe-data-status').textContent = failed ? 'Articles unavailable. Change the date filter to retry.' : 'Latest articles';
     $('globe-app').setAttribute('aria-busy', 'false');
     refreshLocations();
 }
@@ -122,23 +155,23 @@ function makeMapTexture() {
     const context = canvas.getContext('2d');
     const projection = geoEquirectangular().translate([1024, 512]).scale(2048 / (2 * Math.PI));
     const path = geoPath(projection, context);
-    context.fillStyle = '#10232e';
+    context.fillStyle = '#eeeeee';
     context.fillRect(0, 0, canvas.width, canvas.height);
     context.beginPath();
     path(geoGraticule10());
-    context.strokeStyle = '#26404b';
+    context.strokeStyle = '#cccccc';
     context.lineWidth = 0.55;
     context.stroke();
     context.beginPath();
     path(feature(world, world.objects.land));
-    context.fillStyle = '#36515a';
+    context.fillStyle = '#999999';
     context.fill();
-    context.strokeStyle = '#77908b';
+    context.strokeStyle = '#555555';
     context.lineWidth = 0.8;
     context.stroke();
     context.beginPath();
     path(mesh(world, world.objects.countries, (a, b) => a !== b));
-    context.strokeStyle = '#8ea899';
+    context.strokeStyle = '#333333';
     context.lineWidth = 0.7;
     context.stroke();
     const texture = new THREE.CanvasTexture(canvas);
@@ -154,7 +187,7 @@ function makeGlobe() {
     camera.position.copy(initialPosition);
     const renderer = new THREE.WebGLRenderer({ alpha: true, antialias: true, powerPreference: 'low-power' });
     renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
-    renderer.setClearColor(0x0c151c, 0);
+    renderer.setClearColor(0xffffff, 0);
     container.append(renderer.domElement);
     const canvas = renderer.domElement;
     canvas.tabIndex = 0;
@@ -173,21 +206,12 @@ function makeGlobe() {
     controls.autoRotateSpeed = 0.3;
 
     const sphereGeometry = new THREE.SphereGeometry(1, 96, 64);
-    const earth = new THREE.Mesh(sphereGeometry, new THREE.MeshPhongMaterial({ map: makeMapTexture(), shininess: 9, specular: 0x27403e }));
+    const earth = new THREE.Mesh(sphereGeometry, new THREE.MeshPhongMaterial({ map: makeMapTexture(), shininess: 9, specular: 0x222222 }));
     scene.add(earth);
-    scene.add(new THREE.AmbientLight(0xd9eff3, 2));
-    const light = new THREE.DirectionalLight(0xe9f9ef, 2.2);
+    scene.add(new THREE.AmbientLight(0xffffff, 2));
+    const light = new THREE.DirectionalLight(0xffffff, 2.2);
     light.position.set(-2, 4, 4);
     scene.add(light);
-
-    // A thin atmospheric rim follows the view direction, without a background image.
-    const atmosphere = new THREE.Mesh(new THREE.SphereGeometry(1.035, 64, 48), new THREE.ShaderMaterial({
-        uniforms: { glowColor: { value: new THREE.Color('#689ca8') } },
-        vertexShader: 'varying vec3 vNormal; varying vec3 vPosition; void main(){ vNormal=normalize(normalMatrix*normal); vec4 p=modelViewMatrix*vec4(position,1.0); vPosition=p.xyz; gl_Position=projectionMatrix*p; }',
-        fragmentShader: 'uniform vec3 glowColor; varying vec3 vNormal; varying vec3 vPosition; void main(){ float rim=pow(1.0-abs(dot(normalize(vNormal),normalize(-vPosition))),4.0); gl_FragColor=vec4(glowColor,rim*0.20); }',
-        transparent: true, blending: THREE.AdditiveBlending, side: THREE.BackSide, depthWrite: false
-    }));
-    scene.add(atmosphere);
 
     const heatCanvas = document.createElement('canvas');
     heatCanvas.width = 1024;
@@ -202,13 +226,13 @@ function makeGlobe() {
     const columns = new THREE.Group();
     scene.add(markers, columns);
     const selectionRing = new THREE.Mesh(new THREE.RingGeometry(0.018, 0.025, 40),
-        new THREE.MeshBasicMaterial({ color: '#f5f9d2', side: THREE.DoubleSide, depthWrite: false }));
+        new THREE.MeshBasicMaterial({ color: '#000000', side: THREE.DoubleSide, depthWrite: false }));
     selectionRing.visible = false;
     scene.add(selectionRing);
     const dotGeometry = new THREE.SphereGeometry(0.008, 10, 8);
-    const dotMaterial = new THREE.MeshBasicMaterial({ color: '#e5f5c2' });
+    const dotMaterial = new THREE.MeshBasicMaterial({ color: '#000000' });
     const columnGeometry = new THREE.CylinderGeometry(0.0045, 0.009, 1, 8);
-    const columnMaterial = new THREE.MeshBasicMaterial({ color: '#c6e6a7', transparent: true, opacity: 0.9 });
+    const columnMaterial = new THREE.MeshBasicMaterial({ color: '#333333', transparent: true, opacity: 0.9 });
     const pointer = new THREE.Vector2();
     const raycaster = new THREE.Raycaster();
     const direction = new THREE.Vector3(0, 1, 0);
@@ -296,7 +320,7 @@ function makeGlobe() {
         tooltip.hidden = !location;
         canvas.style.cursor = location ? 'pointer' : 'grab';
         if (location) {
-            tooltip.textContent = `${location.name} · ${format.format(location.count)} ${state.mode === 'demo' ? 'sample ' : ''}stories`;
+            tooltip.textContent = `${location.name} · ${format.format(location.count)} stories`;
             const box = container.parentElement.getBoundingClientRect();
             tooltip.style.left = `${Math.max(10, Math.min(event.clientX - box.left + 14, box.width - 224))}px`;
             tooltip.style.top = `${Math.max(10, event.clientY - box.top - 42)}px`;
@@ -347,7 +371,7 @@ function makeGlobe() {
         let max = 0;
         for (const value of density) max = Math.max(max, value);
         const image = heatContext.createImageData(1024, 512);
-        const palette = [[31, 104, 129], [88, 177, 151], [180, 212, 135], [255, 188, 116], [255, 226, 158]];
+        const palette = [[190, 190, 190], [140, 140, 140], [90, 90, 90], [45, 45, 45], [0, 0, 0]];
         for (let i = 0; i < density.length; i++) {
             const t = max ? Math.pow(density[i] / max, 0.65) : 0;
             if (t < 0.035) continue;
@@ -434,8 +458,6 @@ function showFallback() {
 for (const topic of [...TOPICS].sort()) $('globe-topic').append(new Option(titleCase(topic), topic));
 $('globe-topic').addEventListener('change', refreshLocations);
 $('globe-period').addEventListener('change', loadStories);
-$('globe-source').addEventListener('change', loadStories);
-$('globe-retry').addEventListener('click', () => { $('globe-source').value = 'live'; loadStories(); });
 $('globe-location').addEventListener('change', event => selectLocation(state.locations.find(location => location.id === event.target.value)));
 document.querySelectorAll('[data-layer]').forEach(button => button.addEventListener('click', () => {
     state.layer = button.dataset.layer;

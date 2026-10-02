@@ -30,18 +30,22 @@ async function check() {
         const externalRequests = [];
         page.on('pageerror', error => pageErrors.push(error.message));
         page.on('request', request => { if (new URL(request.url()).origin !== new URL(baseURL).origin) externalRequests.push(request.url()); });
-        let feedMode = 'offline';
+        let feedMode = 'live';
         await page.route('**/api/globe?*', route => {
             if (feedMode === 'offline') return route.fulfill({ status: 503, json: { error: 'Test feed unavailable' } });
             const locations = feedMode === 'empty' ? [] : new URL(route.request().url()).searchParams.get('hours') === '24' ? [rows[0], rows[2]] : rows;
             return route.fulfill({ json: { mode: 'live', locations, end: new Date().toISOString() } });
         });
+        await context.route('**/api/globe/articles?*', route => {
+            const query = new URL(route.request().url()).searchParams;
+            assert(['all', 'economics', 'politics', 'sports'].includes(query.get('topic')));
+            return route.fulfill({ json: { articles: [{ id: '1', title: 'Test article', publisher: 'Test publisher', publication_date: new Date().toISOString(), topics: ['economics'], summary: ['A supported fact'], images: [], link: 'https://example.com/story' }], next_offset: null } });
+        });
         await page.goto(baseURL);
         await page.waitForFunction(() => document.querySelector('#globe-app')?.getAttribute('aria-busy') === 'false');
         assert.equal(await page.locator('#globe-fallback').isVisible(), false);
-        assert.equal(await page.locator('#globe-source').inputValue(), 'demo');
-        assert.match(await page.locator('#globe-data-note').innerText(), /not current news events/);
-        assert.equal(await page.locator('#globe-location-count').innerText(), '22');
+        assert.equal(await page.locator('#globe-source').count(), 0);
+        assert.equal(await page.locator('.globe-caption').count(), 0);
         await page.screenshot({ path: path.join(screenshots, 'desktop.png'), fullPage: true });
 
         const globe = page.locator('#globe-canvas canvas');
@@ -65,15 +69,9 @@ async function check() {
         assert.equal(await page.locator('[data-layer="columns"]').getAttribute('aria-pressed'), 'true');
         await page.screenshot({ path: path.join(screenshots, 'columns.png'), fullPage: true });
         await page.getByRole('button', { name: 'Heatmap', exact: false }).click();
-        await page.getByRole('button', { name: 'London, 148 stories', exact: true }).click();
-        assert.equal(await page.locator('#globe-selection h3').innerText(), 'London');
-        assert.match(await page.locator('#globe-selection').innerText(), /148 sample stories/);
-
-        feedMode = 'live';
-        await page.locator('#globe-retry').click();
-        await page.waitForFunction(() => document.querySelector('#globe-story-count').textContent === '14');
-        assert.equal(await page.locator('#globe-location-count').innerText(), '3');
-        assert.equal(await page.locator('#globe-source').inputValue(), 'live');
+        await page.getByRole('button', { name: 'London, 8 stories', exact: true }).click();
+        await page.waitForSelector('.globe-article-card');
+        assert.match(await page.locator('#globe-selection').innerText(), /Test article/);
         await page.locator('#globe-topic').selectOption('economics');
         assert.equal(await page.locator('#globe-story-count').innerText(), '8');
         await page.locator('#globe-topic').selectOption('politics');
@@ -87,19 +85,24 @@ async function check() {
         await page.locator('#globe-period').selectOption('48');
         await page.waitForFunction(() => document.querySelector('#globe-story-count').textContent === '14');
         await page.getByRole('button', { name: 'Brazil, 4 stories', exact: true }).click();
-        assert.match(await page.locator('#globe-selection').innerText(), /Country-level location/);
+        assert.equal(await page.locator('#globe-selection h3').innerText(), 'Brazil');
 
+        feedMode = 'offline';
+        await page.locator('#globe-period').selectOption('24');
+        await page.waitForFunction(() => document.querySelector('#globe-data-status').textContent.includes('unavailable'));
+        assert.equal(await page.locator('#globe-story-count').innerText(), '0');
         feedMode = 'empty';
+        await page.locator('#globe-period').selectOption('48');
         await page.locator('#globe-period').selectOption('24');
         await page.waitForFunction(() => document.querySelector('#globe-story-count').textContent === '0');
-        assert.equal(await page.locator('#globe-source').inputValue(), 'live', 'An empty live feed must not become demo data');
-        await page.locator('#globe-source').selectOption('demo');
+        feedMode = 'live';
         await page.locator('#globe-period').selectOption('48');
+        await page.waitForFunction(() => document.querySelector('#globe-story-count').textContent === '14');
         await page.setViewportSize({ width: 390, height: 844 });
         await page.evaluate(() => window.scrollTo(0, 0));
         assert.equal(await page.evaluate(() => document.documentElement.scrollWidth > window.innerWidth), false, 'Mobile layout must not overflow');
         await page.screenshot({ path: path.join(screenshots, 'mobile.png'), fullPage: true });
-        await page.getByRole('button', { name: 'Tokyo, 96 stories', exact: true }).click();
+        await page.getByRole('button', { name: 'Tokyo, 2 stories', exact: true }).click();
         assert.equal(await page.locator('#globe-selection h3').innerText(), 'Tokyo');
         assert.deepEqual(pageErrors, []);
         assert.deepEqual(externalRequests, [], 'No external map, tile, font, or CDN requests');

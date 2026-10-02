@@ -7,6 +7,29 @@ function validID(value) {
 function createNewsRouter(database) {
     const router = express.Router();
     router.use((req, res, next) => database ? next() : res.status(503).json({ error: "Database is not configured." }));
+    router.get("/globe/articles", async (req, res) => {
+        const { name = "", country = "", level, lat, lng, topic = "all", hours = "48", offset = "0" } = req.query;
+        if (![name, country, level, lat, lng, topic, hours, offset].every((value) => typeof value === "string") ||
+            name.length > 200 || country.length > 200 || !["city", "country"].includes(level) ||
+            !lat.trim() || !lng.trim() || !Number.isFinite(Number(lat)) || Math.abs(Number(lat)) > 90 ||
+            !Number.isFinite(Number(lng)) || Math.abs(Number(lng)) > 180 ||
+            !/^(all|economics|environment|politics|technology|science|health|business|sports|culture|world)$/.test(topic) ||
+            !["24", "48"].includes(hours) || !/^[0-9]{1,6}$/.test(offset)) {
+            return res.status(400).json({ error: "Invalid location, topic, date range or offset." });
+        }
+        const end = new Date();
+        const start = new Date(end.getTime() - Number(hours) * 3600000);
+        const result = await database.query(`SELECT ${articleFields}
+            FROM entries e LEFT JOIN article_summaries s ON s.article_id = e.id
+            WHERE e.has_location = TRUE AND cardinality(e.topics) > 0
+                AND COALESCE(e.location_name, '') = $1 AND COALESCE(e.location_country, '') = $2
+                AND e.location_level = $3 AND e.location_lat = $4 AND e.location_lng = $5
+                AND ($6 = 'all' OR $6 = ANY(e.topics))
+                AND e.publication_date >= $7 AND e.publication_date <= $8
+            ORDER BY e.publication_date DESC, e.id DESC LIMIT 51 OFFSET $9
+        `, [name, country, level, Number(lat), Number(lng), topic, start.toISOString(), end.toISOString(), Number(offset)]);
+        return res.json({ articles: result.rows.slice(0, 50), next_offset: result.rows.length > 50 ? Number(offset) + 50 : null });
+    });
     router.get("/globe", async (req, res) => {
         const hours = req.query.hours === undefined ? "48" : req.query.hours;
         if (typeof hours !== "string" || !["24", "48"].includes(hours)) {
