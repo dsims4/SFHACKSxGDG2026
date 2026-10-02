@@ -94,7 +94,7 @@ async function summarizeArticle(database, articleId, { generateText, model }) {
         throw new Error("A generateText function is required to call the model.");
     }
 
-    const result = await database.query("SELECT id, content FROM entries WHERE id = $1", [id]);
+    const result = await database.query("SELECT id, content FROM entries WHERE id = $1 AND publication_date >= (date_trunc('day', NOW() AT TIME ZONE 'UTC') AT TIME ZONE 'UTC') AND publication_date <= NOW()", [id]);
     const article = result.rows[0];
     if (!article) throw new Error("Article was not found.");
 

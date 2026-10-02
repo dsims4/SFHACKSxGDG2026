@@ -412,3 +412,17 @@ body.dbviewer-page {
     align-items: center;
     margin-top: 0.75rem;
 }
+
+.article-card {
+    padding: 1.25rem;
+    margin-bottom: 1rem;
+    border: 1px solid #7775;
+    border-radius: 12px;
+}
+.article-card li, .topic-general-summary li {
+    margin-bottom: 0.65rem;
+    line-height: 1.6;
+}
+.article-topics { font-size: 0.85rem; }
+.article-images { display: flex; flex-wrap: wrap; gap: 0.75rem; }
+.article-images img { max-width: 100%; width: 240px; height: auto; object-fit: contain; border-radius: 8px; }

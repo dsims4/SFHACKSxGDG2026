@@ -5,9 +5,9 @@ const { validID } = require("../routes/news");
 
 test("article analysis requires a known topic and five summary strings", () => {
     const summary = ["one", "two", "three", "four", "five"];
-    assert.deepEqual(parseArticle(JSON.stringify({ topic: "economics", summary })), { topic: "economics", summary });
-    assert.throws(() => parseArticle(JSON.stringify({ topic: "made-up", summary })));
-    assert.throws(() => parseArticle(JSON.stringify({ topic: "economics", summary: ["one"] })));
+    assert.deepEqual(parseArticle(JSON.stringify({ topics: ["economics"], summary })), { topics: ["economics"], summary });
+    assert.throws(() => parseArticle(JSON.stringify({ topics: ["made-up"], summary })));
+    assert.throws(() => parseArticle(JSON.stringify({ topics: ["economics"], summary: ["one"] })));
 });
 
 test("topic citations must reference supplied article IDs and preserve bigint precision", () => {
@@ -52,4 +52,15 @@ test("topic persistence rolls back if citation insertion fails", async () => {
     }, "gemma");
     assert.ok(statements.includes("ROLLBACK"));
     assert.ok(!statements.includes("COMMIT"));
+});
+
+
+test("articles can cover several topics and duplicate labels are removed", () => {
+    const result = parseArticle(JSON.stringify({
+        topics: ["economics", "environment", "economics"],
+        summary: ["One", "Two", "Three", "Four", "Five"]
+    }));
+    assert.deepEqual(result.topics, ["economics", "environment"]);
+    assert.throws(() => parseArticle(JSON.stringify({ topics: [], summary: result.summary })));
+    assert.throws(() => parseArticle(JSON.stringify({ topics: ["science", "unknown"], summary: result.summary })));
 });

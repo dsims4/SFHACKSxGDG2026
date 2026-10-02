@@ -1,6 +1,6 @@
 const express = require("express");
 
-const articleFields = "e.id::text AS id, s.topic, e.title, e.link, e.images, s.summary";
+const articleFields = "e.id::text AS id, s.topic, e.topics, e.title, e.link, e.images, s.summary";
 function validID(value) {
     return typeof value === "string" && /^[1-9][0-9]{0,18}$/.test(value) && BigInt(value) <= 9223372036854775807n;
 }
@@ -38,12 +38,14 @@ function createNewsRouter(database) {
                 COALESCE((SELECT jsonb_agg(article) FROM (
                     SELECT ${articleFields} FROM entries e
                     JOIN article_summaries s ON s.article_id = e.id
-                    WHERE EXISTS (
+                    WHERE t.topic = ANY(e.topics)
+                        AND (e.publication_date AT TIME ZONE 'UTC')::date = t.date
+                        AND ($2::integer IS NULL OR EXISTS (
                         SELECT 1 FROM topic_bullet_articles b
                         WHERE b.topic_summary_id = t.id AND b.article_id = e.id
-                            AND ($2::integer IS NULL OR b.bullet = $2::integer)
-                    )
-                    ORDER BY e.publication_date DESC, e.id DESC LIMIT 5
+                            AND b.bullet = $2::integer
+                    ))
+                    ORDER BY e.publication_date DESC, e.id DESC
                 ) article), '[]'::jsonb) AS articles
             FROM topic_summaries t WHERE t.id = $1
         `, [req.params.id, event === undefined ? null : Number(event)]);

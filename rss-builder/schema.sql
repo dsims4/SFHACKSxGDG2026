@@ -79,3 +79,9 @@ CREATE TABLE IF NOT EXISTS topic_bullet_articles (
 );
 CREATE INDEX IF NOT EXISTS idx_topic_summaries_date ON topic_summaries(date DESC);
 CREATE INDEX IF NOT EXISTS idx_article_summaries_topic ON article_summaries(topic);
+
+ALTER TABLE entries ADD COLUMN IF NOT EXISTS topics TEXT[] NOT NULL DEFAULT '{}';
+CREATE INDEX IF NOT EXISTS idx_entries_topics ON entries USING GIN(topics);
+ALTER TABLE article_summaries ADD COLUMN IF NOT EXISTS classification_version INTEGER NOT NULL DEFAULT 1;
+UPDATE entries e SET topics = ARRAY[s.topic] FROM article_summaries s
+WHERE s.article_id = e.id AND s.topic IS NOT NULL AND cardinality(e.topics) = 0;

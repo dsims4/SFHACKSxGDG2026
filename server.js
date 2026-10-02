@@ -19,7 +19,7 @@ const path = require("path");
 
 const { createNewsRouter } = require("./routes/news");
 const { startNewsAnalysis } = require("./services/news-analysis");
-const publicRouter = require("./routes/public");
+const { createPublicRouter } = require("./routes/public");
 const { createViewerRouter } = require("./routes/viewer");
 const { createDbViewerRouter } = require("./routes/dbviewer");
 const { readConfig, startRSSBuilder } = require("./rss-builder/rss_builder");
@@ -69,7 +69,8 @@ nunjucks.configure(path.join(__dirname, "views"), {
 app.use(helmet({
     contentSecurityPolicy: {
         directives: {
-            upgradeInsecureRequests: isProduction ? [] : null
+            upgradeInsecureRequests: isProduction ? [] : null,
+            imgSrc: ["'self'", "https:", "data:"]
         }
     },
     referrerPolicy: {
@@ -87,7 +88,7 @@ app.use(express.static(path.join(__dirname, "public")));
 
 // Mount the public pages before the shared error handlers.
 app.use("/api", createNewsRouter(database));
-app.use("/", publicRouter);
+app.use("/", createPublicRouter(database));
 app.use("/", createViewerRouter(database));
 app.use("/", createDbViewerRouter(database));
 /*

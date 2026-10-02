@@ -3,7 +3,7 @@ const { test } = require("node:test");
 const path = require("node:path");
 const { setTimeout: sleep } = require("node:timers/promises");
 const {
-    readConfig, parseDate, inCurrentYearWindow, getContent, shouldSkip,
+    readConfig, parseDate, inTodayWindow, getContent, shouldSkip,
     extractImages, extractLocation, storyID, buildDoc, fetchSingleFeed, fetchFeeds,
     ensureTypesenseCollection, upsertTypesenseDocuments, backfillTypesense,
     insertStories, fetchOnce, startRSSBuilder
@@ -83,16 +83,18 @@ test("RSS is optional until configured, with explicit enable/disable and validat
     assert.throws(() => readConfig({ ...env, RSS_POLL_SECONDS: "1.5" }), /positive integer/);
 });
 
-test("date filtering respects UTC year boundaries, invalid dates, and future stories", () => {
+test("date filtering respects UTC day boundaries, invalid dates, and future stories", () => {
     const now = new Date("2026-03-01T12:00:00Z");
     assert.equal(parseDate({ pubDate: "invalid", updated: "2026-01-01T00:00:00Z" }).toISOString(), "2026-01-01T00:00:00.000Z");
     assert.equal(parseDate({ pubDate: "bad" }), null);
     assert.equal(parseDate({ pubDate: "2026-01-01T00:00:00.999Z" }).getUTCMilliseconds(), 0);
-    assert.equal(inCurrentYearWindow(new Date("2025-12-31T23:59:59Z"), now), false);
-    assert.equal(inCurrentYearWindow(new Date("2026-01-01T00:00:00Z"), now), true);
-    assert.equal(inCurrentYearWindow(now, now), true);
-    assert.equal(inCurrentYearWindow(new Date("2026-03-01T12:00:01Z"), now), false);
-    assert.equal(inCurrentYearWindow(null, now), false);
+    assert.equal(inTodayWindow(new Date("2025-12-31T23:59:59Z"), now), false);
+    assert.equal(inTodayWindow(new Date("2026-03-01T00:00:00Z"), now), true);
+    assert.equal(inTodayWindow(new Date("2026-02-28T23:59:59Z"), now), false);
+    assert.equal(inTodayWindow(new Date("invalid"), now), false);
+    assert.equal(inTodayWindow(now, now), true);
+    assert.equal(inTodayWindow(new Date("2026-03-01T12:00:01Z"), now), false);
+    assert.equal(inTodayWindow(null, now), false);
 });
 
 test("source exclusions are retained while full feed content takes priority", () => {
@@ -142,7 +144,7 @@ test("RSS parsing handles CDATA, content fallback, dates, Reuters titles, and ex
     ].join(""));
     t.mock.method(global, "fetch", async () => new Response(xml));
     const result = await fetchSingleFeed({ name: "Reuters", url: "https://news.example" }, {
-        now: new Date("2026-03-02T00:00:00Z")
+        now: new Date("2026-03-01T23:59:59Z")
     });
     assert.equal(result.error, null);
     assert.equal(result.entries.length, 2);
@@ -168,7 +170,7 @@ test("Atom summaries, published dates, and updated-only entries are supported", 
         </feed>`;
     t.mock.method(global, "fetch", async () => new Response(xml));
     const result = await fetchSingleFeed({ name: "Other", url: "https://news.example" }, {
-        now: new Date("2026-03-03T00:00:00Z")
+        now: new Date("2026-03-01T23:59:59Z")
     });
     assert.equal(result.error, null);
     assert.equal(result.entries.length, 2);
@@ -298,7 +300,7 @@ test("image extraction keeps enclosure, media, and html urls and skips non-image
         </channel></rss>`;
     t.mock.method(global, "fetch", async () => new Response(xml));
     const result = await fetchSingleFeed({ name: "Other", url: "https://news.example" }, {
-        now: new Date("2026-03-02T00:00:00Z")
+        now: new Date("2026-03-01T23:59:59Z")
     });
     assert.equal(result.error, null);
     assert.deepEqual(result.entries[0].images, [
@@ -357,7 +359,7 @@ test("backfill preserves existing IDs and adds location hints to older rows", as
 
 test("a full poll stores stories in PostgreSQL without Typesense credentials", async (t) => {
     const database = fakeDatabase();
-    const date = new Date(Date.UTC(new Date().getUTCFullYear(), 0, 1)).toUTCString();
+    const date = new Date().toUTCString();
     t.mock.method(global, "fetch", async (url) => {
         assert(!url.startsWith(config.typesenseURL));
         return new Response(rss(item("London news", date)));
@@ -395,7 +397,7 @@ test("the worker automatically ingests with PostgreSQL alone", { timeout: 3000 }
         if (sql === "COMMIT" && database.calls.some((call) => call.sql.includes("INSERT INTO"))) stored();
         return result;
     };
-    const date = new Date(Date.UTC(new Date().getUTCFullYear(), 0, 1)).toUTCString();
+    const date = new Date().toUTCString();
     t.mock.method(global, "fetch", async (url) => {
         assert(!url.startsWith(config.typesenseURL));
         return new Response(rss(item("Paris news", date)));
@@ -426,7 +428,7 @@ test("search outages do not stop database writes and recovery backfills stored r
         return result;
     };
     t.mock.method(console, "error", (...args) => errors.push(args.join(" ")));
-    const date = new Date(Date.UTC(new Date().getUTCFullYear(), 0, 1)).toUTCString();
+    const date = new Date().toUTCString();
     t.mock.method(global, "fetch", async (url, options) => {
         if (!url.startsWith(config.typesenseURL)) return new Response(rss(item("Paris news", date)));
         assert(polls > 0, "Stories must be saved before search is contacted.");

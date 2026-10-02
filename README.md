@@ -135,9 +135,9 @@ npm run db:init
 ```
 
 The worker reads `rss-builder/feeds.json`, polls every 600 seconds, and fetches up
-to 10 feeds concurrently. It preserves the Python worker's current-year filtering,
+to 10 feeds concurrently. It applies today's UTC publication-date filtering,
 source exclusions, location hints, PostgreSQL table, and Typesense document IDs.
-When Typesense is configured, current-year database rows are indexed after the
+When Typesense is configured, today’s database rows are indexed after the
 first poll. Stories are saved to PostgreSQL before indexing. A search outage does
 not stop later database writes; indexing retries with a database backfill to repair
 missed imports.
@@ -355,7 +355,7 @@ After verifying `/health`, the setup connects the existing Cloud Run app using
 [Direct VPC egress](https://docs.cloud.google.com/run/docs/configuring/vpc-direct-vpc)
 and `TYPESENSE_URL=http://10.89.0.10:8108`. Only traffic to private addresses uses
 the VPC, so public RSS feeds remain reachable. The worker creates
-`timeline_entries` and backfills current-year PostgreSQL rows on startup.
+`timeline_entries` and backfills today’s PostgreSQL rows on startup.
 This configures indexing; it does not add a browser search interface.
 
 The disk survives VM restarts and is retained if the VM is deleted. Rerunning the
@@ -446,8 +446,8 @@ Set `GEMMA_URL` to the existing private vLLM Cloud Run API and set
 by the application. The existing runtime identity authenticates model requests;
 local development can use `GEMMA_ID_TOKEN`. Startup applies the database schema.
 
-The worker reads `entries.content`, assigns a topic, and saves five strings in
-`article_summaries.summary` (JSONB), plus `topic`. It revisits changed content.
+The worker reads `entries.content`, assigns one or more topics, and saves five strings in
+`article_summaries.summary` (JSONB), plus a legacy primary `topic`. The full category set is stored in `entries.topics` (TEXT[] with a GIN index). It revisits changed content and reclassifies legacy single-topic records.
 Daily `topic_summaries` rows hold five subtopic bullets for each topic and UTC
 publication date. `topic_bullet_articles` maps each numbered bullet to supporting
 articles. These are shared tables with rows for each topic, not dynamically
@@ -465,9 +465,9 @@ Frontend read endpoints (no frontend pages are changed):
 
 - `GET /api/topics?date=2026-10-02`: `{date, topics:[{id, topic, date, bullets:[{bullet, text}]}]}`. Defaults to today's UTC date.
 - `GET /api/topics/:id/bullets/:bullet/articles`: topic/date, bullet number/text, and its supporting `articles` array. Bullet numbers are 1–5.
-- `GET /api/articles/:id`: `{id, topic, title, link, images, summary}`. Summary is a JSON array, not a serialized string; topic/summary may be null until analyzed.
+- `GET /api/articles/:id`: `{id, topic, topics, title, link, images, summary}`. Summary is a JSON array, not a serialized string; topic/summary may be null until analyzed.
 
-Article payloads contain only those six fields (ID supports navigation); raw
+Article payloads contain only those seven fields (ID supports navigation); raw
 content, XML, database credentials and model prompts are never returned by these
 endpoints. Render model text as text, not HTML, and validate external link/image
 URLs in the frontend. Topic lists are empty until analysis publishes results.
@@ -480,9 +480,8 @@ URLs in the frontend. Topic lists are empty until analysis publishes results.
   no published summaries returns an empty cards array.
 - **Topic page — `GET /api/topics/:id`** returns
   `{id, topic, date, summary:[five strings], events:[{event, text}], selected_event:null, articles:[...]}`.
-  The ID is the daily topic summary ID from a feed card. Articles are distinct,
-  cited by that daily summary, and ordered newest first (ID breaks ties), with a
-  maximum of five. Fewer are returned when fewer supporting articles exist.
+  The ID is the daily topic summary ID from a feed card. Articles are distinct, assigned to that topic on its UTC publication date, and
+  ordered newest first (ID breaks ties). All matching articles are returned.
   Add `?event=1` (1–5) to show only articles cited by the clicked event;
   `selected_event` then contains that number. The full topic summary stays available.
 - **Article page — `GET /api/articles/:id`** returns
@@ -490,8 +489,37 @@ URLs in the frontend. Topic lists are empty until analysis publishes results.
   own summary, not the aggregate topic summary. Articles not yet analyzed have
   null topic/summary. Images retain the RSS builder's stored JSON representation.
 
-All nested article objects use the same six fields as the article page. IDs are
+All nested article objects use the same seven fields as the article page. IDs are
 strings to preserve PostgreSQL bigint precision. Invalid IDs, dates, or event
 numbers return 400; missing topic/article IDs return 404; an unconfigured database
 returns 503. Existing `/api/topics` and bullet-specific citation routes remain
 available for compatibility. Reading these endpoints does not invoke the model.
+
+
+### Two-level prototype
+
+The homepage `/` displays topics from today’s UTC publication date.
+Clicking a topic opens `/topic/:id`, with its five plain-text summary bullets and
+all articles assigned to that topic/date. Each article card displays its summary,
+topic labels, and available images; the title links directly to the original
+publisher. There is no subtopic or internal story navigation in this prototype.
+Empty results show a preparation message rather than sample news.
+
+Startup backfills `entries.topics` from existing primary classifications without
+replacing existing category sets. The analysis worker progressively reclassifies
+older records using `classification_version = 2`; summary and membership changes
+are saved atomically. An article can appear under multiple daily topics.
+`topic_bullet_articles` continues to hold the individual bullet-to-article foreign
+key references. Topic-level membership is resolved from `entries.topics` and the
+publication date, independently of whether an article was cited in a bullet.
+The legacy `topic` API field is retained as the first category; use `topics` for
+the full set. No additional subtopic summarization calls or pages are introduced.
+
+
+RSS ingestion, Typesense backfill, article inference (including the manual
+`summarize` command), and daily topic inference are restricted to today's UTC
+publication dates, from 00:00 UTC through now. Yesterday's and older records are
+retained but excluded from new inference. The homepage does not fall back to
+older topics when today's summaries are empty. Existing archived summaries remain
+readable by their explicit IDs/date through the API; reading them never invokes
+Gemma.

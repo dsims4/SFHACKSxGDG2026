@@ -75,10 +75,10 @@ function parseDate(entry) {
     return null;
 }
 
-function inCurrentYearWindow(date, now = new Date()) {
+function inTodayWindow(date, now = new Date()) {
     if (!date) return false;
-    const yearStart = Date.UTC(now.getUTCFullYear(), 0, 1);
-    return date.getTime() >= yearStart && date <= now;
+    const dayStart = Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate());
+    return date.getTime() >= dayStart && date <= now;
 }
 
 // Outermost <item> or <entry> elements, skipping CDATA and comments so markup
@@ -390,7 +390,7 @@ async function fetchSingleFeed(feed, { signal, now = new Date() } = {}) {
             }
 
             const date = parseDate(entry);
-            if (!inCurrentYearWindow(date, now)) continue;
+            if (!inTodayWindow(date, now)) continue;
 
             const link = (entry.link || "").trim() || null;
             entries.push({
@@ -534,7 +534,7 @@ async function backfillTypesense(database, config, signal) {
                country_lat, country_lng, has_location, images
         FROM entries
         WHERE publication_date >= (
-            date_trunc('year', NOW() AT TIME ZONE 'UTC') AT TIME ZONE 'UTC'
+            date_trunc('day', NOW() AT TIME ZONE 'UTC') AT TIME ZONE 'UTC'
         ) AND publication_date <= NOW()
         ORDER BY publication_date DESC
     `);
@@ -733,7 +733,7 @@ function startRSSBuilder(config, database) {
 module.exports = {
     readConfig,
     parseDate,
-    inCurrentYearWindow,
+    inTodayWindow,
     getContent,
     shouldSkip,
     extractImages,

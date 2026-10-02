@@ -1,49 +1,21 @@
 {% extends "layouts/base.njk" %}
-
 {% block content %}
-
 <div class="homepage">
-
     <h1>newstralizer</h1>
-
+    <p>Explore the latest daily topics and the articles behind them.</p>
     <div class="topics-container">
-
         {% for topic in topics %}
-
-            <div class="topic-column">
-
-                <div class="topic-title">
-                    <a href="/topic/{{ topic.id }}">
-                        <h2>{{ topic.title }}</h2>
-                    </a>
-                </div>
-
-                <div class="topic-summary">
-                    <ul>
-
-                        {% for story in topic.stories %}
-
-                            <li>
-                                <a href="/story/{{ story.id }}">
-                                    {{ story.summary }}
-                                </a>
-                            </li>
-
-                        {% endfor %}
-
-                    </ul>
-                </div>
-
-                <div class="topic-extractions">
-                    <h3>Extractions</h3>
-                </div>
-
-            </div>
-
+        <section class="topic-column">
+            <div class="topic-title"><h2><a href="/topic/{{ topic.id }}">{{ topic.topic | capitalize }}</a></h2></div>
+            <p>{{ topic.date }} · UTC</p>
+            <div class="topic-summary"><ul>
+                {% for bullet in topic.summary %}<li>{{ bullet }}</li>{% endfor %}
+            </ul></div>
+            <a href="/topic/{{ topic.id }}">Read topic and articles →</a>
+        </section>
+        {% else %}
+        <p role="status">{{ message or "Topic summaries are being prepared. Please check back shortly." }}</p>
         {% endfor %}
-
     </div>
-
 </div>
-
 {% endblock %}

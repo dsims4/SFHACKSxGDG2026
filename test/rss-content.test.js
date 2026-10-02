@@ -42,7 +42,7 @@ test("the reported Google News wrapper is not treated as article text", async (t
         </item></channel></rss>`;
     t.mock.method(global, "fetch", async () => new Response(xml));
     const result = await fetchSingleFeed({ name: "Reuters", url: "https://news.google.com/rss/search" }, {
-        now: new Date("2026-03-02")
+        now: new Date("2026-03-01T12:00:00Z")
     });
     assert.equal(result.error, null);
     assert.equal(result.entries.length, 1);
