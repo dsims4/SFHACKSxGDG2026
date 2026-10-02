@@ -1,6 +1,14 @@
 {% extends "layouts/base.njk" %}
-{% block body_class %}news-page{% endblock %}
+{% block body_class %}globe-page{% endblock %}
+{% block scripts %}<link rel="stylesheet" href="/css/globe.css">{% endblock %}
+{% block theme_control %}{% endblock %}
 {% block content %}
+<div class="news-home">
+    <header class="site-header">
+        <a class="wordmark" href="/" aria-label="Newstralizer home"><span class="brand-symbol" aria-hidden="true">✳</span> newstralizer<span class="brand-period">.</span></a>
+        <nav aria-label="Main navigation"><a href="/">The World</a><a href="/briefing">Daily Briefing <span aria-hidden="true">↗</span></a></nav>
+        {% include "partials/theme-toggle.njk" %}
+    </header>
 <div class="topic-page">
     <a href="/briefing">← Daily briefing</a>
     <div class="topic-page-title"><p class="topic-label">Topic</p><h1>{{ topic.topic | capitalize }}</h1><p>{{ topic.date }} · UTC</p></div>
@@ -25,5 +33,6 @@
         </article>
         {% else %}<p>No articles are available for this topic yet.</p>{% endfor %}
     </section>
+</div>
 </div>
 {% endblock %}
