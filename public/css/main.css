@@ -1,27 +1,56 @@
-/* Index-page layout. */
-.main-container {
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    justify-content: center;
-    gap: clamp(1.25rem, 2vw, 2rem);
-    width: min(calc(100% - 2rem), var(--site-max-width));
-    margin: clamp(1.5rem, 4vw, 5rem) auto;
-    padding: clamp(1.5rem, 3vw, 3rem);
-    border: var(--border-strong);
-    border-radius: 2rem;
+/* Whole homepage */
+.homepage {
+    border: 3px solid black;
+    padding: 20px;
+    margin: 20px;
+}
+
+/* Main page title */
+.homepage h1 {
+    border: 2px solid red;
+    padding: 10px;
     text-align: center;
 }
 
-.main-container > * {
-    margin: 0;
-    overflow-wrap: anywhere;
+/* Holds both topic columns */
+.topics-container {
+    border: 3px solid blue;
+    padding: 20px;
+
+    display: flex;
+    gap: 20px;
 }
 
-.main-container h1 {
-    font-size: clamp(1.5rem, 4vw, 3rem);
+/* Each individual topic column */
+.topic-column {
+    border: 3px solid green;
+    padding: 15px;
+
+    flex: 1;
+
+    display: flex;
+    flex-direction: column;
 }
 
-.main-container p {
-    line-height: 1.5;
+/* Topic title section */
+.topic-title {
+    border: 2px solid orange;
+    padding: 10px;
+    margin-bottom: 15px;
+}
+
+/* Summary section */
+.topic-summary {
+    border: 2px solid purple;
+    padding: 10px;
+    margin-bottom: 15px;
+
+    flex: 1;
+}
+
+/* Extractions section */
+.topic-extractions {
+    border: 2px solid brown;
+    padding: 10px;
+    margin-top: auto;
 }
