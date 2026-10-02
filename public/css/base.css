@@ -1,0 +1,36 @@
+/* Shared colors, sizes, and browser defaults. */
+:root {
+    --site-max-width: 60rem;
+    --color-ink: #000000;
+    --color-surface: #ffffff;
+    --border-strong: 2px solid var(--color-ink);
+}
+
+html {
+    font-size: 1rem;
+    box-sizing: border-box;
+}
+
+*,
+*::before,
+*::after {
+    box-sizing: inherit;
+}
+
+body {
+    display: flex;
+    flex-direction: column;
+    min-height: 100vh;
+    min-height: 100dvh;
+    margin: 0;
+    color: var(--color-ink);
+    background-color: var(--color-surface);
+    font-family: system-ui, sans-serif;
+}
+
+main {
+    display: flex;
+    flex: 1;
+    align-items: center;
+    justify-content: center;
+}

@@ -1,0 +1,16 @@
+node_modules/
+
+.env
+.env.*
+!.env.example
+
+.codex/
+.vscode/
+.idea/
+.DS_Store
+
+*.log
+coverage/
+
+*.pem
+*.key
