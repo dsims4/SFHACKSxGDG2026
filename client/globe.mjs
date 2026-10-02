@@ -213,6 +213,11 @@ function makeGlobe() {
     const sphereGeometry = new THREE.SphereGeometry(1, 96, 64);
     const earth = new THREE.Mesh(sphereGeometry, new THREE.MeshBasicMaterial({ map: makeMapTexture() }));
     scene.add(earth);
+    // Back-facing shell draws a crisp silhouette without covering the map.
+    const outline = new THREE.Mesh(sphereGeometry,
+        new THREE.MeshBasicMaterial({ color: '#000000', side: THREE.BackSide }));
+    outline.scale.setScalar(1.006);
+    scene.add(outline);
     const markers = new THREE.Group();
     const columns = new THREE.Group();
     scene.add(markers, columns);
