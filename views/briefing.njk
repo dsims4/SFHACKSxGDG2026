@@ -13,12 +13,18 @@
     <section id="daily-topics" class="daily-topics" aria-labelledby="daily-heading">
         <div class="daily-heading"><div><p class="eyebrow">BEYOND THE HEADLINES</p><h2 id="daily-heading">Your daily briefing</h2></div><p>The topics shaping the conversation.</p></div>
         <form class="briefing-filters" method="get" action="/briefing">
-            <fieldset><legend>Show topics</legend>
-                {% for label in availableTopics %}
-                <label><input type="checkbox" name="topic" value="{{ label }}" {% if label in selectedTopics %}checked{% endif %}> {{ label | capitalize }}</label>
-                {% endfor %}
-            </fieldset>
-            <button type="submit">Apply filters</button> <a href="/briefing">Show all topics</a>
+            <details class="topic-filter">
+                <summary>Filter topics <span class="topic-filter-count">{% if selectedTopics.length %}{{ selectedTopics.length }} selected{% else %}All topics{% endif %}</span></summary>
+                <fieldset>
+                    <legend>Show topics</legend>
+                    <div class="topic-filter-options" tabindex="0" role="region" aria-label="Topic options">
+                        {% for label in availableTopics %}
+                        <label><input type="checkbox" name="topic" value="{{ label }}" {% if label in selectedTopics %}checked{% endif %}> {{ label | capitalize }}</label>
+                        {% endfor %}
+                    </div>
+                </fieldset>
+                <div class="topic-filter-actions"><button type="submit">Apply filters</button> <a href="/briefing">Show all topics</a></div>
+            </details>
         </form>
         <div class="briefing-grid">
         {% for topic in topics %}
@@ -27,7 +33,7 @@
             <p class="topic-label">Topic</p>
             <h3><a href="/topic/{{ topic.id }}">{{ topic.topic | capitalize }} <span aria-hidden="true">↗</span></a></h3>
             <ul>
-                {% for bullet in topic.summary %}{% if bullet | trim %}<li>{{ bullet }}</li>{% endif %}{% endfor %}
+                {% for bullet in topic.summary %}{% if loop.index <= 3 %}{% if bullet | trim %}<li>{{ bullet }}</li>{% endif %}{% endif %}{% endfor %}
             </ul>
             <a class="briefing-link" href="/topic/{{ topic.id }}">Read the briefing <span aria-hidden="true">→</span></a>
         </article>
