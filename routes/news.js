@@ -14,7 +14,9 @@ function createNewsRouter(database) {
             return res.status(400).json({ error: "date must be a valid YYYY-MM-DD UTC date." });
         }
         const result = await database.query(`SELECT id::text, topic, date::text, summary
-            FROM topic_summaries WHERE date = $1::date ORDER BY topic`, [date]);
+            FROM topic_summaries WHERE date BETWEEN $1::date - 1 AND $1::date
+                AND date BETWEEN (NOW() AT TIME ZONE 'UTC')::date - 1 AND (NOW() AT TIME ZONE 'UTC')::date
+            ORDER BY date DESC, topic`, [date]);
         if (req.path === "/feed") {
             return res.json({ date, cards: result.rows.map((row) => ({
                 id: row.id, topic: row.topic, date: row.date,
@@ -39,7 +41,8 @@ function createNewsRouter(database) {
                     SELECT ${articleFields} FROM entries e
                     JOIN article_summaries s ON s.article_id = e.id
                     WHERE t.topic = ANY(e.topics)
-                        AND (e.publication_date AT TIME ZONE 'UTC')::date = t.date
+                        AND (e.publication_date AT TIME ZONE 'UTC')::date BETWEEN t.date - 1 AND t.date
+                        AND e.publication_date >= ((date_trunc('day', NOW() AT TIME ZONE 'UTC') - INTERVAL '1 day') AT TIME ZONE 'UTC') AND e.publication_date <= NOW()
                         AND ($2::integer IS NULL OR EXISTS (
                         SELECT 1 FROM topic_bullet_articles b
                         WHERE b.topic_summary_id = t.id AND b.article_id = e.id

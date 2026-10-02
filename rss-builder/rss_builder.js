@@ -57,7 +57,7 @@ function readConfig(env = process.env) {
         typesenseAPIKey: env.TYPESENSE_API_KEY || null,
         typesenseCollection: env.TYPESENSE_COLLECTION || "timeline_entries",
         feedsFile: env.FEEDS_FILE || path.join(__dirname, "feeds.json"),
-        pollSeconds: readPositiveInteger(env.RSS_POLL_SECONDS, 600, "RSS_POLL_SECONDS"),
+        pollSeconds: readPositiveInteger(env.RSS_POLL_SECONDS, 3600, "RSS_POLL_SECONDS"),
         maxWorkers: readPositiveInteger(env.RSS_MAX_WORKERS, 10, "RSS_MAX_WORKERS")
     };
 }
@@ -75,9 +75,9 @@ function parseDate(entry) {
     return null;
 }
 
-function inTodayWindow(date, now = new Date()) {
+function inRecentWindow(date, now = new Date()) {
     if (!date) return false;
-    const dayStart = Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate());
+    const dayStart = Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate() - 1);
     return date.getTime() >= dayStart && date <= now;
 }
 
@@ -390,7 +390,7 @@ async function fetchSingleFeed(feed, { signal, now = new Date() } = {}) {
             }
 
             const date = parseDate(entry);
-            if (!inTodayWindow(date, now)) continue;
+            if (!inRecentWindow(date, now)) continue;
 
             const link = (entry.link || "").trim() || null;
             entries.push({
@@ -534,7 +534,7 @@ async function backfillTypesense(database, config, signal) {
                country_lat, country_lng, has_location, images
         FROM entries
         WHERE publication_date >= (
-            date_trunc('day', NOW() AT TIME ZONE 'UTC') AT TIME ZONE 'UTC'
+            (date_trunc('day', NOW() AT TIME ZONE 'UTC') - INTERVAL '1 day') AT TIME ZONE 'UTC'
         ) AND publication_date <= NOW()
         ORDER BY publication_date DESC
     `);
@@ -686,6 +686,18 @@ function startRSSBuilder(config, database) {
                             console.log("Typesense indexing disabled. RSS stories will be stored in PostgreSQL.");
                         }
                     }
+                    const claim = await pool.query(`
+                        INSERT INTO worker_schedule(name, next_run_at)
+                        VALUES ('rss', NOW() + $1 * INTERVAL '1 second')
+                        ON CONFLICT(name) DO UPDATE SET next_run_at = EXCLUDED.next_run_at
+                        WHERE worker_schedule.next_run_at <= NOW()
+                        RETURNING name
+                    `, [config.pollSeconds]);
+                    if (!claim.rows.length) {
+                        await sleep(Math.min(config.pollSeconds * 1000, 60000), undefined, { signal });
+                        continue;
+                    }
+                    const cycleStarted = Date.now();
                     const stories = await fetchOnce(pool, config, signal);
 
                     if (config.typesenseAPIKey) {
@@ -704,6 +716,7 @@ function startRSSBuilder(config, database) {
                             console.error("Typesense sync failed; PostgreSQL stories are saved and indexing will retry:", error.message);
                         }
                     }
+                    delay = Math.max(1, config.pollSeconds * 1000 - (Date.now() - cycleStarted));
                 } catch (error) {
                     if (signal.aborted) break;
                     console.error("RSS cycle failed:", error.message);
@@ -733,7 +746,7 @@ function startRSSBuilder(config, database) {
 module.exports = {
     readConfig,
     parseDate,
-    inTodayWindow,
+    inRecentWindow,
     getContent,
     shouldSkip,
     extractImages,

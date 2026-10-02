@@ -3,7 +3,7 @@ const { test } = require("node:test");
 const path = require("node:path");
 const { setTimeout: sleep } = require("node:timers/promises");
 const {
-    readConfig, parseDate, inTodayWindow, getContent, shouldSkip,
+    readConfig, parseDate, inRecentWindow, getContent, shouldSkip,
     extractImages, extractLocation, storyID, buildDoc, fetchSingleFeed, fetchFeeds,
     ensureTypesenseCollection, upsertTypesenseDocuments, backfillTypesense,
     insertStories, fetchOnce, startRSSBuilder
@@ -55,6 +55,7 @@ function fakeDatabase(failInsert = false) {
         on() {},
         async query(sql, values) {
             calls.push({ sql, values });
+            if (sql.includes("INSERT INTO worker_schedule")) return { rows: [{ name: "rss" }] };
             if (failInsert && sql.includes("INSERT INTO")) throw new Error("Insert failed");
             return { rows: [] };
         },
@@ -77,7 +78,7 @@ test("RSS is optional until configured, with explicit enable/disable and validat
     assert.throws(() => readConfig({ RSS_ENABLED: "yes" }), /true or false/);
     const env = { DATABASE_URL: "set", TYPESENSE_API_KEY: "set" };
     assert.equal(readConfig(env).maxWorkers, 10);
-    assert.equal(readConfig(env).pollSeconds, 600);
+    assert.equal(readConfig(env).pollSeconds, 3600);
     assert.equal(readConfig(env).feedsFile, config.feedsFile);
     assert.throws(() => readConfig({ ...env, RSS_MAX_WORKERS: "0" }), /positive integer/);
     assert.throws(() => readConfig({ ...env, RSS_POLL_SECONDS: "1.5" }), /positive integer/);
@@ -88,13 +89,14 @@ test("date filtering respects UTC day boundaries, invalid dates, and future stor
     assert.equal(parseDate({ pubDate: "invalid", updated: "2026-01-01T00:00:00Z" }).toISOString(), "2026-01-01T00:00:00.000Z");
     assert.equal(parseDate({ pubDate: "bad" }), null);
     assert.equal(parseDate({ pubDate: "2026-01-01T00:00:00.999Z" }).getUTCMilliseconds(), 0);
-    assert.equal(inTodayWindow(new Date("2025-12-31T23:59:59Z"), now), false);
-    assert.equal(inTodayWindow(new Date("2026-03-01T00:00:00Z"), now), true);
-    assert.equal(inTodayWindow(new Date("2026-02-28T23:59:59Z"), now), false);
-    assert.equal(inTodayWindow(new Date("invalid"), now), false);
-    assert.equal(inTodayWindow(now, now), true);
-    assert.equal(inTodayWindow(new Date("2026-03-01T12:00:01Z"), now), false);
-    assert.equal(inTodayWindow(null, now), false);
+    assert.equal(inRecentWindow(new Date("2025-12-31T23:59:59Z"), now), false);
+    assert.equal(inRecentWindow(new Date("2026-03-01T00:00:00Z"), now), true);
+    assert.equal(inRecentWindow(new Date("2026-02-27T23:59:59Z"), now), false);
+    assert.equal(inRecentWindow(new Date("invalid"), now), false);
+    assert.equal(inRecentWindow(new Date("2026-02-28T00:00:00Z"), now), true);
+    assert.equal(inRecentWindow(now, now), true);
+    assert.equal(inRecentWindow(new Date("2026-03-01T12:00:01Z"), now), false);
+    assert.equal(inRecentWindow(null, now), false);
 });
 
 test("source exclusions are retained while full feed content takes priority", () => {

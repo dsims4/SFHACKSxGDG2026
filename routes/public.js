@@ -13,18 +13,19 @@ function createPublicRouter(database) {
     router.get("/", async (req, res) => {
         if (!database) return res.status(503).render("index.njk", { topics: [], message: "News is temporarily unavailable." });
         const result = await database.query(`SELECT id::text, topic, date::text, summary
-            FROM topic_summaries WHERE date = (NOW() AT TIME ZONE 'UTC')::date ORDER BY topic`);
+            FROM topic_summaries WHERE date BETWEEN (NOW() AT TIME ZONE 'UTC')::date - 1 AND (NOW() AT TIME ZONE 'UTC')::date ORDER BY date DESC, topic`);
         return res.render("index.njk", { currentPage: "index", topics: result.rows });
     });
     router.get("/topic/:id", async (req, res) => {
         if (!validID(req.params.id)) return res.status(400).send("Invalid topic ID.");
         if (!database) return res.status(503).send("News is temporarily unavailable.");
-        const result = await database.query("SELECT id::text, topic, date::text, summary FROM topic_summaries WHERE id = $1", [req.params.id]);
+        const result = await database.query("SELECT id::text, topic, date::text, summary FROM topic_summaries WHERE id = $1 AND date BETWEEN (NOW() AT TIME ZONE 'UTC')::date - 1 AND (NOW() AT TIME ZONE 'UTC')::date", [req.params.id]);
         const topic = result.rows[0];
         if (!topic) return res.status(404).send("Topic not found.");
         const articles = await database.query(`SELECT e.id::text, e.title, e.link, e.images, e.topics, s.summary
             FROM entries e LEFT JOIN article_summaries s ON s.article_id = e.id
-            WHERE $1 = ANY(e.topics) AND (e.publication_date AT TIME ZONE 'UTC')::date = $2::date
+            WHERE $1 = ANY(e.topics) AND (e.publication_date AT TIME ZONE 'UTC')::date BETWEEN $2::date - 1 AND $2::date
+                AND e.publication_date >= ((date_trunc('day', NOW() AT TIME ZONE 'UTC') - INTERVAL '1 day') AT TIME ZONE 'UTC') AND e.publication_date <= NOW()
             ORDER BY e.publication_date DESC, e.id DESC`, [topic.topic, topic.date]);
         return res.render("topic.njk", {
             currentPage: "topic", topic,

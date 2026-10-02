@@ -46,7 +46,7 @@ function parseTopic(text, articles) {
 async function analyzePending(client, generateText, model, signal) {
     const pending = await client.query(`
         SELECT e.id, e.content FROM entries e LEFT JOIN article_summaries s ON s.article_id = e.id
-        WHERE e.publication_date >= (date_trunc('day', NOW() AT TIME ZONE 'UTC') AT TIME ZONE 'UTC') AND e.publication_date <= NOW()
+        WHERE e.publication_date >= ((date_trunc('day', NOW() AT TIME ZONE 'UTC') - INTERVAL '1 day') AT TIME ZONE 'UTC') AND e.publication_date <= NOW()
             AND BTRIM(e.content) <> '' AND (s.topic IS NULL OR s.classification_version < 2 OR s.content_hash IS DISTINCT FROM md5(e.content))
         ORDER BY e.publication_date DESC, e.id LIMIT 20
     `);
@@ -72,20 +72,20 @@ async function analyzePending(client, generateText, model, signal) {
     }
 
     const groups = await client.query(`
-        SELECT membership.topic, (e.publication_date AT TIME ZONE 'UTC')::date::text AS date
+        SELECT membership.topic, (NOW() AT TIME ZONE 'UTC')::date::text AS date
         FROM entries e JOIN article_summaries s ON s.article_id = e.id
         CROSS JOIN LATERAL unnest(e.topics) AS membership(topic)
-        WHERE e.publication_date >= (date_trunc('day', NOW() AT TIME ZONE 'UTC') AT TIME ZONE 'UTC') AND e.publication_date <= NOW()
+        WHERE e.publication_date >= ((date_trunc('day', NOW() AT TIME ZONE 'UTC') - INTERVAL '1 day') AT TIME ZONE 'UTC') AND e.publication_date <= NOW()
             AND s.content_hash = md5(e.content)
-        GROUP BY membership.topic, (e.publication_date AT TIME ZONE 'UTC')::date
+        GROUP BY membership.topic
         ORDER BY date DESC, membership.topic
     `);
     for (const group of groups.rows) {
         signal?.throwIfAborted();
         const sources = await client.query(`
             SELECT e.id::text, s.summary FROM entries e JOIN article_summaries s ON s.article_id = e.id
-            WHERE $1 = ANY(e.topics) AND (e.publication_date AT TIME ZONE 'UTC')::date = $2::date
-                AND e.publication_date >= (date_trunc('day', NOW() AT TIME ZONE 'UTC') AT TIME ZONE 'UTC') AND e.publication_date <= NOW()
+            WHERE $1 = ANY(e.topics) AND (e.publication_date AT TIME ZONE 'UTC')::date BETWEEN $2::date - 1 AND $2::date
+                AND e.publication_date >= ((date_trunc('day', NOW() AT TIME ZONE 'UTC') - INTERVAL '1 day') AT TIME ZONE 'UTC') AND e.publication_date <= NOW()
                 AND s.content_hash = md5(e.content)
             ORDER BY e.publication_date DESC, e.id DESC LIMIT 100
         `, [group.topic, group.date]);
@@ -95,7 +95,7 @@ async function analyzePending(client, generateText, model, signal) {
         const existing = await client.query("SELECT source_hash FROM topic_summaries WHERE topic = $1 AND date = $2", [group.topic, group.date]);
         if (existing.rows[0]?.source_hash === fingerprint) continue;
         try {
-            const response = await generateText(`${rules}\nSummarize ${group.topic} on ${group.date} into five distinct subtopic bullets. Include only facts relevant to this topic, even when articles cover other topics. Each bullet must cite only IDs of articles directly supporting its claims. Return {"bullets":[{"text":"fact","article_ids":["id"]}]}. Articles:\n${payload}`, { model, signal, schema: topicSchema });
+            const response = await generateText(`${rules}\nCreate the ${group.date} daily summary for ${group.topic} from the supplied articles published today and yesterday into five distinct subtopic bullets. Include only facts relevant to this topic, even when articles cover other topics. Each bullet must cite only IDs of articles directly supporting its claims. Return {"bullets":[{"text":"fact","article_ids":["id"]}]}. Articles:\n${payload}`, { model, signal, schema: topicSchema });
             const bullets = parseTopic(response.text, sources.rows);
             await client.query("BEGIN");
             try {

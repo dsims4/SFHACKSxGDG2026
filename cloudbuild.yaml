@@ -33,7 +33,7 @@ steps:
       - "--port=3000"
       - "--execution-environment=gen2"
       - "--add-cloudsql-instances=${_INSTANCE_CONNECTION_NAME}"
-      - "--update-env-vars=INSTANCE_CONNECTION_NAME=${_INSTANCE_CONNECTION_NAME},DB_NAME=${_DB_NAME},DB_USER=${_DB_USER},RSS_ENABLED=true"
+      - "--update-env-vars=INSTANCE_CONNECTION_NAME=${_INSTANCE_CONNECTION_NAME},DB_NAME=${_DB_NAME},DB_USER=${_DB_USER},RSS_ENABLED=true,RSS_POLL_SECONDS=3600"
       # Reference the stored secret; no database password is included in this file.
       # update-secrets preserves TYPESENSE_API_KEY configured by setup-typesense.sh.
       - "--update-secrets=DB_PASSWORD=${_DB_PASSWORD_SECRET}:latest"

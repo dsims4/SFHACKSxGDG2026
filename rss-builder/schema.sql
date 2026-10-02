@@ -85,3 +85,8 @@ CREATE INDEX IF NOT EXISTS idx_entries_topics ON entries USING GIN(topics);
 ALTER TABLE article_summaries ADD COLUMN IF NOT EXISTS classification_version INTEGER NOT NULL DEFAULT 1;
 UPDATE entries e SET topics = ARRAY[s.topic] FROM article_summaries s
 WHERE s.article_id = e.id AND s.topic IS NOT NULL AND cardinality(e.topics) = 0;
+
+CREATE TABLE IF NOT EXISTS worker_schedule (
+    name TEXT PRIMARY KEY,
+    next_run_at TIMESTAMPTZ NOT NULL
+);

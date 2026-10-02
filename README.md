@@ -523,3 +523,20 @@ retained but excluded from new inference. The homepage does not fall back to
 older topics when today's summaries are empty. Existing archived summaries remain
 readable by their explicit IDs/date through the API; reading them never invokes
 Gemma.
+
+
+### Current two-day window and hourly RSS schedule
+
+The active window is yesterday at 00:00 UTC through now. RSS ingestion, article
+inference, and search backfill exclude older and future articles. Each current-day
+topic summary combines articles from today and yesterday; new articles refresh
+that daily row. Existing yesterday summary rows remain visible alongside today's
+rows in the feed. Topic article lists exclude anything outside the active window.
+
+RSS defaults to `RSS_POLL_SECONDS=3600`, also set explicitly by `cloudbuild.yaml`.
+A database-backed `worker_schedule` claim allows only one RSS poll per interval
+across instances and restarts. The first poll runs immediately if no recent claim
+exists. Failed or interrupted polls wait until the next interval; the running app
+checks a claimed schedule at most once per minute. Continuous operation requires
+the existing minimum instance and always-allocated CPU deployment settings.
+This replaces the earlier today-only behavior described above.
