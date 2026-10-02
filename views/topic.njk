@@ -1,0 +1,32 @@
+{% extends "layouts/base.njk" %}
+
+{% block content %}
+
+<div class="topic-page">
+
+    <div class="topic-page-title">
+        <h1>{{ topic.title }}</h1>
+    </div>
+
+    <div class="topic-general-summary">
+        <h2>Topic Summary</h2>
+        <p>{{ topic.generalSummary }}</p>
+    </div>
+
+    <div class="topic-stories">
+        <h2>Stories</h2>
+
+        {% for story in topic.stories %}
+
+            <div class="story-summary">
+                <a href="/story/{{ story.id }}">
+                    {{ story.summary }}
+                </a>
+            </div>
+
+        {% endfor %}
+    </div>
+
+</div>
+
+{% endblock %}

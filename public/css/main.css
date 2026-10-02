@@ -55,6 +55,81 @@
     margin-top: auto;
 }
 
+
+/* ========================================
+   STORY PAGE
+   ======================================== */
+
+/* Entire story page */
+.story-page {
+    border: 3px solid black;
+
+    padding: 20px;
+    margin: 20px;
+}
+
+
+/* Story title section */
+.story-title {
+    border: 2px solid red;
+
+    padding: 15px;
+    margin-bottom: 20px;
+}
+
+/* Remove default heading margin */
+.story-title h1 {
+    margin: 0;
+}
+
+
+/* Full summary section */
+.story-content {
+    border: 2px solid blue;
+
+    padding: 20px;
+    margin-bottom: 20px;
+}
+
+/* Remove unnecessary paragraph margin */
+.story-content p {
+    margin: 0;
+}
+
+
+/* Extractions / sources section */
+.story-extractions {
+    border: 2px solid green;
+
+    padding: 20px;
+}
+
+/* Extractions heading */
+.story-extractions h2 {
+    margin-top: 0;
+}
+
+
+/* Individual source links */
+.story-extractions a {
+    display: block;
+
+    border: 2px solid orange;
+
+    padding: 10px;
+    margin-bottom: 10px;
+
+    text-decoration: none;
+    color: black;
+
+    cursor: pointer;
+}
+
+
+/* Source hover effect */
+.story-extractions a:hover {
+    background-color: #eeeeee;
+}
 body.viewer-page main {
     align-items: stretch;
     justify-content: flex-start;

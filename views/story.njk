@@ -1,0 +1,27 @@
+{% extends "layouts/base.njk" %}
+
+{% block content %}
+
+<div class="story-page">
+
+    <div class="story-title">
+        <h1>{{ story.title }}</h1>
+    </div>
+
+    <div class="story-content">
+        <p>{{ story.summary }}</p>
+    </div>
+
+    <div class="story-extractions">
+        <h2>Extractions</h2>
+
+        {% for source in story.sources %}
+            <a href="{{ source.url }}" target="_blank">
+                {{ source.name }}
+            </a>
+        {% endfor %}
+    </div>
+
+</div>
+
+{% endblock %}

@@ -8,104 +8,39 @@
 
     <div class="topics-container">
 
-        <!-- Topic 1 -->
-        <div class="topic-column">
+        {% for topic in topics %}
 
-            <div class="topic-title">
-                <a href="/topic/1">
-                    <h2>Topic 1</h2>
-                </a>
+            <div class="topic-column">
+
+                <div class="topic-title">
+                    <a href="/topic/{{ topic.id }}">
+                        <h2>{{ topic.title }}</h2>
+                    </a>
+                </div>
+
+                <div class="topic-summary">
+                    <ul>
+
+                        {% for story in topic.stories %}
+
+                            <li>
+                                <a href="/story/{{ story.id }}">
+                                    {{ story.summary }}
+                                </a>
+                            </li>
+
+                        {% endfor %}
+
+                    </ul>
+                </div>
+
+                <div class="topic-extractions">
+                    <h3>Extractions</h3>
+                </div>
+
             </div>
 
-            <div class="topic-summary">
-                <ul>
-                    <li>
-                        <a href="/story/1">
-                            Generated non-biased summary here.
-                        </a>
-                    </li>
-
-                    <li>
-                        <a href="/story/2">
-                            Generated non-biased summary here.
-                        </a>
-                    </li>
-
-                    <li>
-                        <a href="/story/3">
-                            Generated non-biased summary here.
-                        </a>
-                    </li>
-
-                    <li>
-                        <a href="/story/4">
-                            Generated non-biased summary here.
-                        </a>
-                    </li>
-
-                    <li>
-                        <a href="/story/5">
-                            Generated non-biased summary here.
-                        </a>
-                    </li>
-                </ul>
-            </div>
-
-            <div class="topic-extractions">
-                <h3>Extractions</h3>
-            </div>
-
-        </div>
-
-
-        <!-- Topic 2 -->
-        <div class="topic-column">
-
-            <div class="topic-title">
-                <a href="/topic/2">
-                    <h2>Topic 2</h2>
-                </a>
-            </div>
-
-            <div class="topic-summary">
-                <ul>
-                    <li>
-                        <a href="/story/1">
-                            Generated non-biased summary here.
-                        </a>
-                    </li>
-
-                    <li>
-                        <a href="/story/2">
-                            Generated non-biased summary here.
-                        </a>
-                    </li>
-
-                    <li>
-                        <a href="/story/3">
-                            Generated non-biased summary here.
-                        </a>
-                    </li>
-
-                    <li>
-                        <a href="/story/4">
-                            Generated non-biased summary here.
-                        </a>
-                    </li>
-
-                    <li>
-                        <a href="/story/5">
-                            Generated non-biased summary here.
-                        </a>
-                    </li>
-                </ul>
-            </div>
-
-            <div class="topic-extractions">
-                <h3>Extractions</h3>
-            </div>
-
-        </div>
+        {% endfor %}
 
     </div>
 
