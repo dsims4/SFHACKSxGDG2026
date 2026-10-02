@@ -45,7 +45,11 @@ test("topic persistence rolls back if citation insertion fails", async () => {
         return { rows: [] };
     } };
     const bullets = Array.from({ length: 5 }, () => ({ text: "Fact", article_ids: ["1"] }));
-    await analyzePending(client, async () => ({ text: JSON.stringify({ bullets }) }), "gemma");
+    await analyzePending(client, async (prompt, { schema }) => {
+        // The deployed vLLM grammar rejects uniqueItems; parseTopic deduplicates IDs.
+        assert.equal(JSON.stringify(schema).includes('"uniqueItems"'), false);
+        return { text: JSON.stringify({ bullets }) };
+    }, "gemma");
     assert.ok(statements.includes("ROLLBACK"));
     assert.ok(!statements.includes("COMMIT"));
 });

@@ -15,7 +15,7 @@ const topicSchema = {
         type: "object", additionalProperties: false, required: ["text", "article_ids"],
         properties: {
             text: { type: "string", minLength: 1 },
-            article_ids: { type: "array", minItems: 1, uniqueItems: true, items: { type: "string" } }
+            article_ids: { type: "array", minItems: 1, items: { type: "string" } }
         }
     } } }
 };
