@@ -3,7 +3,7 @@
 {% block content %}
 <div class="topic-page">
     <a href="/">← All topics</a>
-    <div class="topic-page-title"><h1>{{ topic.topic | capitalize }}</h1><p>{{ topic.date }} · UTC</p></div>
+    <div class="topic-page-title"><p class="topic-label">Topic</p><h1>{{ topic.topic | capitalize }}</h1><p>{{ topic.date }} · UTC</p></div>
     <section class="topic-general-summary">
         <h2>Topic summary</h2>
         <ul>{% for bullet in topic.summary %}{% if bullet | trim %}<li>{{ bullet }}</li>{% endif %}{% endfor %}</ul>
@@ -12,8 +12,11 @@
         <h2>Articles</h2>
         {% for article in articles %}
         <article class="news-card story-summary article-card">
+            <header class="news-card-header">
             <h3 class="news-card-title">{% if article.link %}<a href="{{ article.link }}" target="_blank" rel="noopener noreferrer">{{ article.title or "Read original article" }}</a>{% else %}{{ article.title or "Untitled article" }}{% endif %}</h3>
-            <p class="news-card-meta article-topics">{{ article.topics | join(" · ") }}</p>
+            <p class="news-card-meta"><span class="article-publisher">{{ article.publisher }}</span> · <time datetime="{{ article.publishedAt }}">{{ article.publishedLabel }} UTC</time></p>
+            <p class="article-topics"><span class="topic-label">Topics</span> {% for label in article.topics %}<span class="topic-tag">{{ label | capitalize }}</span>{% endfor %}</p>
+            </header>
             {% if article.summary and article.summary.length %}<ul class="news-card-summary">{% for bullet in article.summary %}{% if bullet | trim %}<li>{{ bullet }}</li>{% endif %}{% endfor %}</ul>
             {% endif %}
             {% if article.images.length %}<div class="article-images">

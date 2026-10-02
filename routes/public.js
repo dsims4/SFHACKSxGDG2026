@@ -27,7 +27,7 @@ function createPublicRouter(database) {
         const result = await database.query("SELECT id::text, topic, date::text, summary FROM topic_summaries WHERE id = $1 AND date BETWEEN (NOW() AT TIME ZONE 'UTC')::date - 1 AND (NOW() AT TIME ZONE 'UTC')::date", [req.params.id]);
         const topic = result.rows[0];
         if (!topic) return res.status(404).send("Topic not found.");
-        const articles = await database.query(`SELECT e.id::text, e.title, e.link, jsonb_path_query_array(CASE WHEN jsonb_typeof(e.images) = 'array' THEN e.images ELSE '[]'::jsonb END, '$[0 to 2]') AS images, e.topics, s.summary
+        const articles = await database.query(`SELECT e.id::text, e.title, e.source AS publisher, e.publication_date, e.link, jsonb_path_query_array(CASE WHEN jsonb_typeof(e.images) = 'array' THEN e.images ELSE '[]'::jsonb END, '$[0 to 2]') AS images, e.topics, s.summary
             FROM entries e LEFT JOIN article_summaries s ON s.article_id = e.id
             WHERE $1 = ANY(e.topics) AND (e.publication_date AT TIME ZONE 'UTC')::date BETWEEN $2::date - 1 AND $2::date
                 AND e.publication_date >= ((date_trunc('day', NOW() AT TIME ZONE 'UTC') - INTERVAL '1 day') AT TIME ZONE 'UTC') AND e.publication_date <= NOW()
@@ -36,6 +36,10 @@ function createPublicRouter(database) {
             currentPage: "topic", topic,
             articles: articles.rows.map((article) => ({
                 ...article, link: safeURL(article.link),
+                publishedAt: new Date(article.publication_date).toISOString(),
+                publishedLabel: new Intl.DateTimeFormat("en-US", {
+                    dateStyle: "medium", timeStyle: "short", timeZone: "UTC"
+                }).format(new Date(article.publication_date)),
                 images: (Array.isArray(article.images) ? article.images : [])
                     .map((image) => safeURL(typeof image === "string" ? image : image?.url)).filter(Boolean)
             }))
