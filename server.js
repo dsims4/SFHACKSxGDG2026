@@ -1,5 +1,7 @@
 // Load environment variables before reading any server setting below.
-require("dotenv").config();
+require("dotenv").config({
+    path: [require("node:path").join(__dirname, ".env.local"), require("node:path").join(__dirname, ".env")]
+});
 // This integer is the TCP port where Express accepts connections.
 const port = Number.parseInt(process.env.PORT || "3000", 10);
 // This boolean enables production-only proxy, caching, and HTTPS behavior.

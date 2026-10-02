@@ -1,4 +1,7 @@
-require("dotenv").config();
+const path = require("node:path");
+require("dotenv").config({
+    path: [path.join(__dirname, "..", ".env.local"), path.join(__dirname, "..", ".env")]
+});
 const { readDatabaseConfig, createDatabasePool, initializeSchema } = require("../services/db");
 
 async function main() {

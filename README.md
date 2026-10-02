@@ -12,10 +12,12 @@ With Node.js 24 available, install the locked dependencies:
 npm ci
 ```
 
-Optionally copy `.env.example` to `.env` to customize the port or environment:
+The committed `.env` contains shared development settings. Put personal overrides
+and credentials in `.env.local`, which Git and Docker exclude. To start with an
+override template:
 
 ```bash
-cp .env.example .env
+cp .env.example .env.local
 ```
 
 Start the server:
@@ -59,7 +61,52 @@ package manifest and lockfile.
 | `nodemailer` | Future email delivery |
 
 Email and rate-limit features are not wired into the starter.
-Environment files, dependencies, and private keys are excluded from Git.
+The shared `.env` contains no password. Personal environment files, dependencies,
+and private keys are excluded from Git.
+
+## Shared database access
+
+Teammates connect to the same Cloud SQL `timeline` database through the
+[Cloud SQL Auth Proxy](https://docs.cloud.google.com/sql/docs/postgres/connect-auth-proxy).
+They need `gcloud` and the proxy available on their machine, plus Cloud SQL Client
+access to project `sfsu-hackathon-2026` and Secret Manager Secret Accessor access to
+secret `sfhacksxgdg2026-db-password`. The shared file alone does not grant cloud access.
+
+An authorized teammate can generate their credentials before creating any manual
+`.env.local` overrides:
+
+```bash
+gcloud auth login
+npm run db:env
+```
+
+The helper retrieves the existing database password from Secret Manager and writes
+an ignored `.env.local` with owner-only file permissions. It does not print the
+password or overwrite an existing `.env.local`.
+
+Start the proxy in one terminal, using the same signed-in Google Cloud account:
+
+```bash
+cloud-sql-proxy --gcloud-auth --address=127.0.0.1 --port=5433 \
+  sfsu-hackathon-2026:us-west2:sfhacksxgdg2026-db
+```
+
+In another terminal, run `npm start` and open `/viewer` or `/dbviewer`. Keep the proxy
+running while the app uses the database. `npm run db:init` also reads `.env.local`.
+Process environment variables take precedence over both files; `.env.local` takes
+precedence over the shared `.env`. Cloud Run continues to use its managed socket
+and Secret Manager settings, because environment files are excluded from its image.
+
+To grant a teammate access, a project administrator can replace `TEAMMATE_EMAIL`
+with their Google account and run:
+
+```bash
+gcloud projects add-iam-policy-binding sfsu-hackathon-2026 \
+  --member=user:TEAMMATE_EMAIL --role=roles/cloudsql.client --condition=None
+gcloud secrets add-iam-policy-binding sfhacksxgdg2026-db-password \
+  --project=sfsu-hackathon-2026 --member=user:TEAMMATE_EMAIL \
+  --role=roles/secretmanager.secretAccessor
+```
 
 ## RSS worker
 
@@ -106,7 +153,7 @@ docker run --rm -p 3000:3000 sfhacksxgdg2026:local
 
 The root image includes the RSS worker and all its dependencies. There is no
 separate Python image or worker build. To enable RSS in the container, pass its
-settings with `--env-file .env` and use database and Typesense addresses reachable
+settings with `--env-file .env.local` and use database and Typesense addresses reachable
 from inside the container.
 
 `cloudbuild.yaml` deploys this image to `sfhacksxgdg2026-git` in `us-west2`.
