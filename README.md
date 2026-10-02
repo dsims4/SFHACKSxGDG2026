@@ -40,6 +40,7 @@ npm run dev
 - `public/js/app.js`: shared browser API-response helper.
 - `rss-builder/`: JavaScript RSS worker, feed list, geographic hints, and SQL schema.
 - `services/db.js`: shared PostgreSQL pool, Cloud SQL settings, and schema initialization.
+- `services/article-summaries.js`: article JSON, summary prompts, model response validation, and summary storage.
 - `scripts/setup-cloud-sql.sh`: one-time Google Cloud resource setup.
 - `scripts/setup-typesense.sh`: persistent Typesense VM and Cloud Run connection setup.
 - `.env.example`: local defaults and optional future service settings.
@@ -149,6 +150,49 @@ Run the worker checks without live PostgreSQL, Typesense, or news services:
 ```bash
 npm test
 ```
+
+## Article summaries
+
+Schema initialization creates `article_summaries` alongside `entries`. Each row
+has its own ID, a unique `article_id` referencing `entries.id`, a `summary` JSONB
+array of exactly five nonempty strings, a model identifier, and creation/update
+timestamps. Deleting an article deletes its summary. Saving another summary for
+the same article updates the existing row. The usual app startup or `npm run db:init`
+applies this schema to a configured database.
+
+`services/article-summaries.js` exports these backend helpers:
+
+- `jsonifyArticle({ id, content })` returns a JSON string with `article_id` and
+  `content`. IDs remain strings to preserve PostgreSQL bigint precision. The RSS
+  parser has already extracted `entries.content`; the helper preserves plain text
+  and any HTML/XML markup inside that JSON string, without parsing another XML tree.
+- `buildSummaryPrompt(article)` includes that payload and requests exactly five
+  factual bullet strings in a JSON array.
+- `parseSummaryText(text)` parses model output into a JavaScript array, validates
+  five nonempty strings, and rejects prose, wrong types, and double-encoded JSON.
+- `saveArticleSummary(pool, { articleId, text, model })` validates the model's text
+  and upserts the parsed summary into JSONB using parameterized SQL.
+- `summarizeArticle(pool, articleId, { generateText, model })` reads the article,
+  calls the supplied generator, and saves its `{ text: "[...JSON bullets...]" }`
+  response. Generation or validation failures leave any existing summary intact.
+
+Example for the future Gemma 4 31B Instruct deployment:
+
+```javascript
+const { summarizeArticle } = require("./services/article-summaries");
+
+// Supply the vLLM adapter when the deployment is ready. It must return { text }.
+const saved = await summarizeArticle(pool, "123", {
+    model: configuredModelName,
+    generateText: generateWithGemma
+});
+console.log(saved.summary); // A JavaScript array, parsed from PostgreSQL JSONB.
+```
+
+The database value is `["First point", "Second point", "Third point", "Fourth point", "Fifth point"]`,
+not a JSON string containing another JSON string. Summarization is explicit for
+now; the vLLM HTTP adapter and automatic scheduling will be connected when that
+deployment is available. No model endpoint or credentials are required to run the app.
 
 ## Container
 
