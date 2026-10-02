@@ -34,3 +34,19 @@ main {
     align-items: center;
     justify-content: center;
 }
+
+.site-footer {
+    padding: 1rem;
+    border-top: var(--border-strong);
+    text-align: center;
+    font-size: 0.875rem;
+}
+
+.site-footer p {
+    margin: 0;
+}
+
+.site-footer a {
+    color: inherit;
+    text-underline-offset: 0.2em;
+}
