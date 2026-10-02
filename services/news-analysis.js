@@ -82,6 +82,11 @@ async function analyzePending(client, generateText, model, signal) {
     `);
     for (const group of groups.rows) {
         signal?.throwIfAborted();
+        await client.query(`
+            INSERT INTO topic_summaries(topic, date, summary, source_hash, model, source_window_days)
+            VALUES($1, $2, '[]'::jsonb, '', 'pending', 1)
+            ON CONFLICT(topic, date) DO NOTHING
+        `, [group.topic, group.date]);
         const sources = await client.query(`
             SELECT e.id::text, s.summary FROM entries e JOIN article_summaries s ON s.article_id = e.id
             WHERE $1 = ANY(e.topics) AND (e.publication_date AT TIME ZONE 'UTC')::date = $2::date
@@ -113,6 +118,7 @@ async function analyzePending(client, generateText, model, signal) {
                         SELECT $1, $2, UNNEST($3::bigint[])`, [id, index + 1, bullet.article_ids]);
                 }
                 await client.query("COMMIT");
+                console.log(`Saved ${bullets.length} topic bullets for ${group.topic}/${group.date}.`);
             } catch (error) {
                 await client.query("ROLLBACK");
                 throw error;
@@ -127,6 +133,7 @@ async function analyzePending(client, generateText, model, signal) {
 function startNewsAnalysis(database, env = process.env) {
     const config = readGemmaConfig(env);
     if (!config || env.SUMMARIES_ENABLED !== "true") return null;
+    console.log("News summary worker enabled.");
     const controller = new AbortController();
     const generateText = createGemmaGenerator(config);
     const done = (async () => {

@@ -396,7 +396,7 @@ test("the worker automatically ingests with PostgreSQL alone", { timeout: 3000 }
     const query = database.query;
     database.query = async (sql, values) => {
         const result = await query(sql, values);
-        if (sql === "COMMIT" && database.calls.some((call) => call.sql.includes("INSERT INTO"))) stored();
+        if (sql === "COMMIT" && database.calls.some((call) => call.sql.includes("INSERT INTO entries"))) stored();
         return result;
     };
     const date = new Date().toUTCString();

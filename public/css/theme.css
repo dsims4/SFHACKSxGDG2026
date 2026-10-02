@@ -127,11 +127,11 @@ html[data-theme="dark"] .dbviewer a {
     .site-header nav a { padding: 1rem 0; }
 }
 
-/* Keep contrast behind the inverted globe without recoloring its gray columns. */
+/* Invert the globe and its background together; columns remain gray. */
 html[data-theme="dark"] .globe-visual {
-    background: #fff;
+    background: var(--color-surface);
 }
 
 html[data-theme="dark"] :is(.globe-view-label, .tiny-cross, .view-dimension, .globe-visual-footer, .globe-instructions span, .globe-loading, .globe-fallback) {
-    color: #000;
+    color: var(--color-ink);
 }
