@@ -7,7 +7,7 @@ function validID(value) {
 function createNewsRouter(database) {
     const router = express.Router();
     router.use((req, res, next) => database ? next() : res.status(503).json({ error: "Database is not configured." }));
-    router.get("/topics", async (req, res) => {
+    router.get(["/feed", "/topics"], async (req, res) => {
         const date = req.query.date || new Date().toISOString().slice(0, 10);
         if (typeof date !== "string" || !/^\d{4}-\d{2}-\d{2}$/.test(date) ||
             !Number.isFinite(Date.parse(date)) || new Date(date).toISOString().slice(0, 10) !== date) {
@@ -15,10 +15,45 @@ function createNewsRouter(database) {
         }
         const result = await database.query(`SELECT id::text, topic, date::text, summary
             FROM topic_summaries WHERE date = $1::date ORDER BY topic`, [date]);
+        if (req.path === "/feed") {
+            return res.json({ date, cards: result.rows.map((row) => ({
+                id: row.id, topic: row.topic, date: row.date,
+                events: row.summary.map((text, index) => ({ event: index + 1, text }))
+            })) });
+        }
         return res.json({ date, topics: result.rows.map((row) => ({
             id: row.id, topic: row.topic, date: row.date,
             bullets: row.summary.map((text, index) => ({ bullet: index + 1, text }))
         })) });
+    });
+    router.get("/topics/:id", async (req, res) => {
+        const event = req.query.event;
+        if (!validID(req.params.id) || (event !== undefined &&
+            (typeof event !== "string" || !/^[1-5]$/.test(event)))) {
+            return res.status(400).json({ error: "Invalid topic ID or event number (1–5)." });
+        }
+        // EXISTS avoids duplicate articles cited by more than one event.
+        const result = await database.query(`
+            SELECT t.id::text, t.topic, t.date::text, t.summary,
+                COALESCE((SELECT jsonb_agg(article) FROM (
+                    SELECT ${articleFields} FROM entries e
+                    JOIN article_summaries s ON s.article_id = e.id
+                    WHERE EXISTS (
+                        SELECT 1 FROM topic_bullet_articles b
+                        WHERE b.topic_summary_id = t.id AND b.article_id = e.id
+                            AND ($2::integer IS NULL OR b.bullet = $2::integer)
+                    )
+                    ORDER BY e.publication_date DESC, e.id DESC LIMIT 5
+                ) article), '[]'::jsonb) AS articles
+            FROM topic_summaries t WHERE t.id = $1
+        `, [req.params.id, event === undefined ? null : Number(event)]);
+        if (!result.rows.length) return res.status(404).json({ error: "Topic summary not found." });
+        const row = result.rows[0];
+        return res.json({
+            ...row,
+            events: row.summary.map((text, index) => ({ event: index + 1, text })),
+            selected_event: event === undefined ? null : Number(event)
+        });
     });
     router.get("/topics/:id/bullets/:bullet/articles", async (req, res) => {
         if (!validID(req.params.id) || !/^[1-5]$/.test(req.params.bullet)) return res.status(400).json({ error: "Invalid topic ID or bullet number." });

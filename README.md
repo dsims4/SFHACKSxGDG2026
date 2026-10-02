@@ -471,3 +471,27 @@ Article payloads contain only those six fields (ID supports navigation); raw
 content, XML, database credentials and model prompts are never returned by these
 endpoints. Render model text as text, not HTML, and validate external link/image
 URLs in the frontend. Topic lists are empty until analysis publishes results.
+
+### Page API contracts
+
+- **Main feed — `GET /api/feed?date=YYYY-MM-DD`** returns
+  `{date, cards:[{id, topic, date, events:[{event:1, text:"..."}, ...]}]}`.
+  Each card has exactly five events. Date defaults to today in UTC; a date with
+  no published summaries returns an empty cards array.
+- **Topic page — `GET /api/topics/:id`** returns
+  `{id, topic, date, summary:[five strings], events:[{event, text}], selected_event:null, articles:[...]}`.
+  The ID is the daily topic summary ID from a feed card. Articles are distinct,
+  cited by that daily summary, and ordered newest first (ID breaks ties), with a
+  maximum of five. Fewer are returned when fewer supporting articles exist.
+  Add `?event=1` (1–5) to show only articles cited by the clicked event;
+  `selected_event` then contains that number. The full topic summary stays available.
+- **Article page — `GET /api/articles/:id`** returns
+  `{id, topic, title, link, images, summary:[five strings]}`. This is the article's
+  own summary, not the aggregate topic summary. Articles not yet analyzed have
+  null topic/summary. Images retain the RSS builder's stored JSON representation.
+
+All nested article objects use the same six fields as the article page. IDs are
+strings to preserve PostgreSQL bigint precision. Invalid IDs, dates, or event
+numbers return 400; missing topic/article IDs return 404; an unconfigured database
+returns 503. Existing `/api/topics` and bullet-specific citation routes remain
+available for compatibility. Reading these endpoints does not invoke the model.
