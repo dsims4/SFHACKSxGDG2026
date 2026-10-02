@@ -65,13 +65,12 @@ async function check() {
         await page.getByRole('button', { name: 'Reset globe view', exact: true }).click();
         assert.equal(await page.locator('#globe-rotate').getAttribute('aria-pressed'), 'false');
 
-        await page.getByRole('button', { name: 'Columns', exact: false }).click();
-        assert.equal(await page.locator('[data-layer="columns"]').getAttribute('aria-pressed'), 'true');
-        await page.screenshot({ path: path.join(screenshots, 'columns.png'), fullPage: true });
-        await page.getByRole('button', { name: 'Heatmap', exact: false }).click();
+        assert.equal(await page.locator('[data-layer]').count(), 0);
+        assert.equal(await page.locator('.heat-legend').count(), 0);
         await page.getByRole('button', { name: 'London, 8 stories', exact: true }).click();
         await page.waitForSelector('.globe-article-card');
         assert.match(await page.locator('#globe-selection').innerText(), /Test article/);
+        assert.equal(await page.locator('.location-topic-title').innerText(), 'Economics');
         await page.locator('#globe-topic').selectOption('economics');
         assert.equal(await page.locator('#globe-story-count').innerText(), '8');
         await page.locator('#globe-topic').selectOption('politics');

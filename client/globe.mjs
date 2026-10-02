@@ -3,13 +3,13 @@ import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import { geoEquirectangular, geoGraticule10, geoPath } from 'd3-geo';
 import { feature, mesh } from 'topojson-client';
 import world from 'world-atlas/countries-110m.json';
-import { TOPICS, aggregateLocations, createDensity, globePosition } from './globe-data.mjs';
+import { TOPICS, aggregateLocations, globePosition } from './globe-data.mjs';
 
 const $ = id => document.getElementById(id);
 const format = new Intl.NumberFormat('en-US');
 const titleCase = text => text.charAt(0).toUpperCase() + text.slice(1);
 const reducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)');
-const state = { rows: [], locations: [], selected: null, articleRequest: null, layer: 'heatmap', request: null, renderer: null };
+const state = { rows: [], locations: [], selected: null, articleRequest: null, request: null, renderer: null };
 
 function element(tag, className, text) {
     const node = document.createElement(tag);
@@ -78,7 +78,17 @@ async function loadArticles(location, offset = 0) {
                 images.append(image);
             }
             if (images.children.length) card.append(images);
-            panel.append(card);
+            const selectedTopic = $('globe-topic').value;
+            const topics = [...new Set((article.topics || []).filter(topic => TOPICS.includes(topic)))].sort();
+            for (const topic of selectedTopic === 'all' ? topics : topics.filter(topic => topic === selectedTopic)) {
+                let group = [...panel.querySelectorAll('.location-topic-group')].find(node => node.dataset.topic === topic);
+                if (!group) {
+                    group = element('section', 'location-topic-group'); group.dataset.topic = topic;
+                    group.append(element('h4', 'location-topic-title', titleCase(topic)));
+                    panel.append(group);
+                }
+                group.append(card.cloneNode(true));
+            }
         }
         if (!data.articles.length && offset === 0) panel.append(element('p', '', 'No articles match these filters.'));
         if (data.next_offset !== null) {
@@ -155,23 +165,23 @@ function makeMapTexture() {
     const context = canvas.getContext('2d');
     const projection = geoEquirectangular().translate([1024, 512]).scale(2048 / (2 * Math.PI));
     const path = geoPath(projection, context);
-    context.fillStyle = '#eeeeee';
+    context.fillStyle = '#000000';
     context.fillRect(0, 0, canvas.width, canvas.height);
     context.beginPath();
     path(geoGraticule10());
-    context.strokeStyle = '#cccccc';
+    context.strokeStyle = '#222222';
     context.lineWidth = 0.55;
     context.stroke();
     context.beginPath();
     path(feature(world, world.objects.land));
-    context.fillStyle = '#999999';
+    context.fillStyle = '#ffffff';
     context.fill();
-    context.strokeStyle = '#555555';
+    context.strokeStyle = '#000000';
     context.lineWidth = 0.8;
     context.stroke();
     context.beginPath();
     path(mesh(world, world.objects.countries, (a, b) => a !== b));
-    context.strokeStyle = '#333333';
+    context.strokeStyle = '#000000';
     context.lineWidth = 0.7;
     context.stroke();
     const texture = new THREE.CanvasTexture(canvas);
@@ -206,22 +216,8 @@ function makeGlobe() {
     controls.autoRotateSpeed = 0.3;
 
     const sphereGeometry = new THREE.SphereGeometry(1, 96, 64);
-    const earth = new THREE.Mesh(sphereGeometry, new THREE.MeshPhongMaterial({ map: makeMapTexture(), shininess: 9, specular: 0x222222 }));
+    const earth = new THREE.Mesh(sphereGeometry, new THREE.MeshBasicMaterial({ map: makeMapTexture() }));
     scene.add(earth);
-    scene.add(new THREE.AmbientLight(0xffffff, 2));
-    const light = new THREE.DirectionalLight(0xffffff, 2.2);
-    light.position.set(-2, 4, 4);
-    scene.add(light);
-
-    const heatCanvas = document.createElement('canvas');
-    heatCanvas.width = 1024;
-    heatCanvas.height = 512;
-    const heatContext = heatCanvas.getContext('2d');
-    const heatTexture = new THREE.CanvasTexture(heatCanvas);
-    heatTexture.colorSpace = THREE.SRGBColorSpace;
-    const heat = new THREE.Mesh(sphereGeometry, new THREE.MeshBasicMaterial({ map: heatTexture, transparent: true, depthWrite: false, opacity: 0.88 }));
-    heat.scale.setScalar(1.003);
-    scene.add(heat);
     const markers = new THREE.Group();
     const columns = new THREE.Group();
     scene.add(markers, columns);
@@ -232,7 +228,7 @@ function makeGlobe() {
     const dotGeometry = new THREE.SphereGeometry(0.008, 10, 8);
     const dotMaterial = new THREE.MeshBasicMaterial({ color: '#000000' });
     const columnGeometry = new THREE.CylinderGeometry(0.0045, 0.009, 1, 8);
-    const columnMaterial = new THREE.MeshBasicMaterial({ color: '#333333', transparent: true, opacity: 0.9 });
+    const columnMaterial = new THREE.MeshBasicMaterial({ color: '#777777' });
     const pointer = new THREE.Vector2();
     const raycaster = new THREE.Raycaster();
     const direction = new THREE.Vector3(0, 1, 0);
@@ -367,22 +363,6 @@ function makeGlobe() {
 
     function update(locations) {
         if (disposed) return;
-        const density = createDensity(locations);
-        let max = 0;
-        for (const value of density) max = Math.max(max, value);
-        const image = heatContext.createImageData(1024, 512);
-        const palette = [[190, 190, 190], [140, 140, 140], [90, 90, 90], [45, 45, 45], [0, 0, 0]];
-        for (let i = 0; i < density.length; i++) {
-            const t = max ? Math.pow(density[i] / max, 0.65) : 0;
-            if (t < 0.035) continue;
-            const p = t * (palette.length - 1);
-            const index = Math.min(palette.length - 2, Math.floor(p));
-            const f = p - index;
-            for (let c = 0; c < 3; c++) image.data[i * 4 + c] = palette[index][c] * (1 - f) + palette[index + 1][c] * f;
-            image.data[i * 4 + 3] = Math.min(230, t * 420);
-        }
-        heatContext.putImageData(image, 0, 0);
-        heatTexture.needsUpdate = true;
         markers.clear();
         columns.clear();
         const peak = Math.max(1, ...locations.map(location => location.count));
@@ -398,11 +378,6 @@ function makeGlobe() {
             bar.quaternion.setFromUnitVectors(direction, normal);
             columns.add(bar);
         }
-        setLayer();
-    }
-    function setLayer() {
-        heat.visible = state.layer === 'heatmap';
-        columns.visible = state.layer === 'columns';
     }
     function focus(location) {
         if (disposed) return;
@@ -445,26 +420,19 @@ function makeGlobe() {
     // A page retained in the back/forward cache must keep its WebGL resources.
     window.addEventListener('pagehide', event => { if (!event.persisted) dispose(); });
     $('globe-loading').hidden = true;
-    return { update, setLayer, focus, select };
+    return { update, focus, select };
 }
 
 function showFallback() {
     $('globe-loading').hidden = true;
     $('globe-fallback').hidden = false;
     $('globe-canvas').hidden = true;
-    document.querySelectorAll('.globe-controls button, [data-layer]').forEach(button => { button.disabled = true; });
+    document.querySelectorAll('.globe-controls button').forEach(button => { button.disabled = true; });
 }
 
 for (const topic of [...TOPICS].sort()) $('globe-topic').append(new Option(titleCase(topic), topic));
 $('globe-topic').addEventListener('change', refreshLocations);
 $('globe-period').addEventListener('change', loadStories);
 $('globe-location').addEventListener('change', event => selectLocation(state.locations.find(location => location.id === event.target.value)));
-document.querySelectorAll('[data-layer]').forEach(button => button.addEventListener('click', () => {
-    state.layer = button.dataset.layer;
-    document.querySelectorAll('[data-layer]').forEach(item => item.setAttribute('aria-pressed', String(item === button)));
-    $('globe-legend-title').textContent = state.layer === 'heatmap' ? 'Story density' : 'Column height';
-    document.querySelector('.heat-legend').classList.toggle('is-columns', state.layer === 'columns');
-    state.renderer?.setLayer();
-}));
 try { state.renderer = makeGlobe(); } catch (error) { console.warn('Globe rendering unavailable:', error.message); showFallback(); }
 loadStories();

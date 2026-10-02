@@ -1,0 +1,40 @@
+{% extends "layouts/base.njk" %}
+{% block title %}Daily Briefing — Newstralizer{% endblock %}
+{% block body_class %}globe-page{% endblock %}
+{% block scripts %}<link rel="stylesheet" href="/css/globe.css">{% endblock %}
+{% block content %}
+<div class="news-home">
+    <header class="site-header">
+        <a class="wordmark" href="/" aria-label="Newstralizer home"><span class="brand-symbol" aria-hidden="true">✳</span> newstralizer<span class="brand-period">.</span></a>
+        <nav aria-label="Main navigation"><a href="/">The world</a><a href="/briefing" aria-current="page">Daily briefing <span aria-hidden="true">↗</span></a></nav>
+        <span class="header-note">A little context. A wider world.</span>
+    </header>
+
+    <section id="daily-topics" class="daily-topics" aria-labelledby="daily-heading">
+        <div class="daily-heading"><div><p class="eyebrow">BEYOND THE HEADLINES</p><h2 id="daily-heading">Your daily briefing</h2></div><p>The topics shaping the conversation.</p></div>
+        <form class="briefing-filters" method="get" action="/briefing">
+            <fieldset><legend>Show topics</legend>
+                {% for label in availableTopics %}
+                <label><input type="checkbox" name="topic" value="{{ label }}" {% if label in selectedTopics %}checked{% endif %}> {{ label | capitalize }}</label>
+                {% endfor %}
+            </fieldset>
+            <button type="submit">Apply filters</button> <a href="/briefing">Show all topics</a>
+        </form>
+        <div class="briefing-grid">
+        {% for topic in topics %}
+        <article class="briefing-card news-card">
+            <p class="briefing-date">{{ topic.date }} · UTC</p>
+            <p class="topic-label">Topic</p>
+            <h3><a href="/topic/{{ topic.id }}">{{ topic.topic | capitalize }} <span aria-hidden="true">↗</span></a></h3>
+            <ul>
+                {% for bullet in topic.summary %}{% if bullet | trim %}<li>{{ bullet }}</li>{% endif %}{% endfor %}
+            </ul>
+            <a class="briefing-link" href="/topic/{{ topic.id }}">Read the briefing <span aria-hidden="true">→</span></a>
+        </article>
+        {% else %}
+        <div class="briefing-empty" role="status"><span aria-hidden="true">↗</span><div><h3>Your next perspective is on its way.</h3><p>{{ message or "No summaries match these topics yet. Choose other topics or check back shortly." }}</p></div></div>
+        {% endfor %}
+        </div>
+    </section>
+</div>
+{% endblock %}

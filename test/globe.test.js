@@ -71,14 +71,14 @@ test('spherical heatmap wraps across the date line and adds overlapping stories'
     assert.ok(Math.abs(globePosition(0, 90)[2] + 1) < 0.0001);
 });
 
-test('homepage keeps the globe and briefing fallback available during a database failure', async () => {
+test('briefing shows a fallback during a database failure', async () => {
     const router = createPublicRouter({ query: async () => { throw new Error('Test database failure'); } });
-    const route = router.stack.find(item => item.route?.path === '/');
+    const route = router.stack.find(item => item.route?.path === '/briefing');
     const response = { statusCode: 200, status(code) { this.statusCode = code; return this; },
         render(template, data) { this.template = template; this.data = data; return this; } };
-    await route.route.stack[0].handle({}, response);
+    await route.route.stack[0].handle({ query: {} }, response);
     assert.equal(response.statusCode, 503);
-    assert.equal(response.template, 'index.njk');
+    assert.equal(response.template, 'briefing.njk');
     assert.deepEqual(response.data.topics, []);
 });
 
@@ -96,6 +96,21 @@ test('location articles validate filters and return bounded article pages', asyn
     assert.equal(response.body.next_offset, 50);
     assert.deepEqual(calls[0].values.slice(0, 6), ['London', 'United Kingdom', 'city', 51.5, -0.12, 'economics']);
     await route.route.stack[0].handle({ query: { ...query, lat: '91' } }, response);
+    assert.equal(response.statusCode, 400);
+    assert.equal(calls.length, 1);
+});
+
+
+test('briefing filters accept multiple known topics and parameterize the query', async () => {
+    const calls = [];
+    const router = createPublicRouter({ query: async (sql, values) => { calls.push(values); return { rows: [] }; } });
+    const route = router.stack.find(item => item.route?.path === '/briefing');
+    const response = { statusCode: 200, status(code) { this.statusCode = code; return this; },
+        send() { return this; }, render(template, data) { this.data = data; return this; } };
+    await route.route.stack[0].handle({ query: { topic: ['science', 'politics'] } }, response);
+    assert.deepEqual(calls[0], [['science', 'politics']]);
+    assert.deepEqual(response.data.selectedTopics, ['science', 'politics']);
+    await route.route.stack[0].handle({ query: { topic: 'invalid' } }, response);
     assert.equal(response.statusCode, 400);
     assert.equal(calls.length, 1);
 });

@@ -156,3 +156,11 @@
     .globe-body { display: block; }
     .globe-sidebar { display: block; max-height: none; }
 }
+
+.briefing-filters { margin-bottom: 1.5rem; }
+.briefing-filters fieldset { display: flex; flex-wrap: wrap; gap: 0.75rem 1.25rem; padding: 1rem; border: 1px solid #000; margin: 0 0 0.75rem; }
+.briefing-filters label { display: inline-flex; align-items: center; gap: 0.35rem; font-size: 0.9rem; }
+.briefing-filters input { accent-color: #000; }
+.briefing-filters button { border: 1px solid #000; padding: 0.5rem 0.75rem; background: #000; color: #fff; cursor: pointer; margin-right: 0.75rem; }
+.briefing-filters a { text-decoration: underline; }
+.location-topic-title { margin: 1.5rem 0 0; padding-bottom: 0.5rem; border-bottom: 2px solid #000; font-size: 1rem; }

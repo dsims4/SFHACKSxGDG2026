@@ -1,4 +1,5 @@
 const express = require("express");
+const { TOPICS } = require("../services/news-analysis");
 const { validID } = require("./news");
 
 function safeURL(value) {
@@ -10,15 +11,25 @@ function safeURL(value) {
 
 function createPublicRouter(database) {
     const router = express.Router();
-    router.get("/", async (req, res) => {
-        if (!database) return res.status(503).render("index.njk", { topics: [], message: "News is temporarily unavailable." });
+    router.get("/", (req, res) => res.render("index.njk", { currentPage: "index" }));
+    router.get("/briefing", async (req, res) => {
+        const selectedTopics = req.query.topic === undefined ? [] :
+            (Array.isArray(req.query.topic) ? req.query.topic : [req.query.topic]);
+        if (selectedTopics.length > TOPICS.length || selectedTopics.some((topic) => !TOPICS.includes(topic))) {
+            return res.status(400).send("Invalid topic filter.");
+        }
+        const context = { availableTopics: TOPICS, selectedTopics };
+
+        if (!database) return res.status(503).render("briefing.njk", { ...context, topics: [], message: "News is temporarily unavailable." });
         try {
             const result = await database.query(`SELECT id::text, topic, date::text, summary
-                FROM topic_summaries WHERE date BETWEEN (NOW() AT TIME ZONE 'UTC')::date - 1 AND (NOW() AT TIME ZONE 'UTC')::date ORDER BY date DESC, topic`);
-            return res.render("index.njk", { currentPage: "index", topics: result.rows });
+                FROM topic_summaries WHERE date BETWEEN (NOW() AT TIME ZONE 'UTC')::date - 1 AND (NOW() AT TIME ZONE 'UTC')::date
+                    AND (cardinality($1::text[]) = 0 OR topic = ANY($1::text[]))
+                ORDER BY date DESC, topic`, [selectedTopics]);
+            return res.render("briefing.njk", { ...context, currentPage: "briefing", topics: result.rows });
         } catch (error) {
-            console.error("Homepage topics unavailable:", error.message);
-            return res.status(503).render("index.njk", { topics: [], message: "News is temporarily unavailable. Please try again shortly." });
+            console.error("Daily briefing unavailable:", error.message);
+            return res.status(503).render("briefing.njk", { ...context, topics: [], message: "News is temporarily unavailable. Please try again shortly." });
         }
     });
     router.get("/topic/:id", async (req, res) => {
