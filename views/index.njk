@@ -1,14 +1,15 @@
 {% extends "layouts/base.njk" %}
+{% block body_class %}news-page{% endblock %}
 {% block content %}
 <div class="homepage">
     <h1>newstralizer</h1>
     <p>Explore the latest daily topics and the articles behind them.</p>
     <div class="topics-container">
         {% for topic in topics %}
-        <section class="topic-column">
-            <div class="topic-title"><h2><a href="/topic/{{ topic.id }}">{{ topic.topic | capitalize }}</a></h2></div>
-            <p>{{ topic.date }} · UTC</p>
-            <div class="topic-summary"><ul>
+        <section class="news-card topic-column">
+            <div class="news-card-title topic-title"><h2><a href="/topic/{{ topic.id }}">{{ topic.topic | capitalize }}</a></h2></div>
+            <p class="news-card-meta">{{ topic.date }} · UTC</p>
+            <div class="news-card-summary topic-summary"><ul>
                 {% for bullet in topic.summary %}{% if bullet | trim %}<li>{{ bullet }}</li>{% endif %}{% endfor %}
             </ul></div>
             <a href="/topic/{{ topic.id }}">Read topic and articles →</a>

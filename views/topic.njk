@@ -1,4 +1,5 @@
 {% extends "layouts/base.njk" %}
+{% block body_class %}news-page{% endblock %}
 {% block content %}
 <div class="topic-page">
     <a href="/">← All topics</a>
@@ -10,10 +11,10 @@
     <section class="topic-stories">
         <h2>Articles</h2>
         {% for article in articles %}
-        <article class="story-summary article-card">
-            <h3>{% if article.link %}<a href="{{ article.link }}" target="_blank" rel="noopener noreferrer">{{ article.title or "Read original article" }}</a>{% else %}{{ article.title or "Untitled article" }}{% endif %}</h3>
-            <p class="article-topics">{{ article.topics | join(" · ") }}</p>
-            {% if article.summary and article.summary.length %}<ul>{% for bullet in article.summary %}{% if bullet | trim %}<li>{{ bullet }}</li>{% endif %}{% endfor %}</ul>
+        <article class="news-card story-summary article-card">
+            <h3 class="news-card-title">{% if article.link %}<a href="{{ article.link }}" target="_blank" rel="noopener noreferrer">{{ article.title or "Read original article" }}</a>{% else %}{{ article.title or "Untitled article" }}{% endif %}</h3>
+            <p class="news-card-meta article-topics">{{ article.topics | join(" · ") }}</p>
+            {% if article.summary and article.summary.length %}<ul class="news-card-summary">{% for bullet in article.summary %}{% if bullet | trim %}<li>{{ bullet }}</li>{% endif %}{% endfor %}</ul>
             {% endif %}
             {% if article.images.length %}<div class="article-images">
                 {% for image in article.images %}<img src="{{ image }}" alt="Image from the article" loading="lazy" referrerpolicy="no-referrer">{% endfor %}
