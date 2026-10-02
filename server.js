@@ -16,10 +16,13 @@ const helmet = require("helmet");
 const path = require("path");
 
 const publicRouter = require("./routes/public");
+const { createViewerRouter } = require("./routes/viewer");
+const { createDbViewerRouter } = require("./routes/dbviewer");
 const { readConfig, startRSSBuilder } = require("./rss-builder/rss_builder");
 const { readDatabaseConfig, createDatabasePool, waitForDatabase } = require("./services/db");
 const databaseConfig = readDatabaseConfig();
 const rssConfig = readConfig();
+const database = databaseConfig ? createDatabasePool(databaseConfig) : null;
 
 // This object is the complete Express application configured below.
 const app = express();
@@ -80,6 +83,8 @@ app.use(express.static(path.join(__dirname, "public")));
 
 // Mount the public pages before the shared error handlers.
 app.use("/", publicRouter);
+app.use("/", createViewerRouter(database));
+app.use("/", createDbViewerRouter(database));
 /*
  * Requests that reached this point did not match any application route.
  */
@@ -127,7 +132,6 @@ app.use((error, req, res, next) => {
 // Start the server after middleware and routes are ready.
 let rssBuilder = null;
 let shuttingDown = false;
-const database = databaseConfig ? createDatabasePool(databaseConfig) : null;
 const databaseController = new AbortController();
 let databaseReady = Promise.resolve();
 

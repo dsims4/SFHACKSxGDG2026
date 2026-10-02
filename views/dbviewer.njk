@@ -1,0 +1,124 @@
+{% extends "layouts/base.njk" %}
+
+{% block title %}DBviewer — entries{% endblock %}
+
+{% block body_class %}dbviewer-page{% endblock %}
+
+{% block scripts %}
+    <script defer src="/js/dbviewer.js"></script>
+{% endblock %}
+
+{% block content %}
+<div class="dbviewer">
+    <h1>DBviewer</h1>
+    <p class="sub">Read-only search on PostgreSQL <code>entries</code>. <a href="/">Home</a> · <a href="/viewer">Stories</a></p>
+
+    {% if unavailable %}
+        <p class="viewer-message">{{ unavailable }}</p>
+    {% else %}
+        <form class="filters" method="get" action="/dbviewer">
+            <div class="row">
+                <label>Search
+                    <input type="search" name="q" value="{{ q }}" maxlength="200" placeholder="Title, content, source, location…" autocomplete="off">
+                </label>
+                <label>Source
+                    <select name="source">
+                        <option value="">(any)</option>
+                        {% for item in sources %}
+                            <option value="{{ item }}" {% if item == source %}selected{% endif %}>{{ item }}</option>
+                        {% endfor %}
+                    </select>
+                </label>
+                <label>From
+                    <input type="date" name="start" value="{{ start }}">
+                </label>
+                <label>To
+                    <input type="date" name="end" value="{{ end }}">
+                </label>
+                <label>Location
+                    <select name="hasLocation">
+                        <option value="">(any)</option>
+                        <option value="true" {% if hasLocation == "true" %}selected{% endif %}>Has location</option>
+                        <option value="false" {% if hasLocation == "false" %}selected{% endif %}>No location</option>
+                    </select>
+                </label>
+                <label>Sort
+                    <select name="sort">
+                        <option value="date_desc" {% if sort == "date_desc" %}selected{% endif %}>Newest first</option>
+                        <option value="date_asc" {% if sort == "date_asc" %}selected{% endif %}>Oldest first</option>
+                        <option value="source_asc" {% if sort == "source_asc" %}selected{% endif %}>Source A–Z</option>
+                        <option value="id_desc" {% if sort == "id_desc" %}selected{% endif %}>Id high→low</option>
+                    </select>
+                </label>
+                <label>Page size
+                    <select name="perPage">
+                        {% for size in pageSizes %}
+                            <option value="{{ size }}" {% if perPage == size %}selected{% endif %}>{{ size }}</option>
+                        {% endfor %}
+                    </select>
+                </label>
+                <label>&nbsp;
+                    <span class="row">
+                        <button class="primary" type="submit">Search</button>
+                        <a class="reset" href="/dbviewer">Reset</a>
+                    </span>
+                </label>
+            </div>
+        </form>
+
+        <p class="meta">{{ total }} matching. Page {{ page }} of {{ pageCount }}. Sort: {{ sort }}.</p>
+        <div class="table-wrap">
+            <table>
+                <thead>
+                    <tr>
+                        <th>Id</th>
+                        <th>Published</th>
+                        <th>Source</th>
+                        <th>Title</th>
+                        <th>Content</th>
+                        <th>Location</th>
+                        <th>Link</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for row in rows %}
+                        <tr>
+                            <td>{{ row.id }}</td>
+                            <td>{{ row.published }}</td>
+                            <td>{{ row.source }}</td>
+                            <td>{{ row.title }}</td>
+                            <td>
+                                <div class="cell-content" id="c{{ row.id }}">{{ row.content }}</div>
+                                <button class="toggle-more" type="button" data-for="c{{ row.id }}">more</button>
+                            </td>
+                            <td>
+                                {{ row.location }}
+                                {% if not row.hasLocation %}<span class="muted">(off)</span>{% endif %}
+                            </td>
+                            <td>
+                                {% if row.link %}
+                                    <a class="row-link" href="{{ row.link }}" target="_blank" rel="noopener noreferrer">open</a>
+                                {% else %}
+                                    —
+                                {% endif %}
+                            </td>
+                        </tr>
+                    {% else %}
+                        <tr>
+                            <td colspan="7">No rows matched.</td>
+                        </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        <div class="pager">
+            {% if page > 1 %}
+                <a class="reset" href="{{ prevHref }}">← Prev</a>
+            {% endif %}
+            {% if page < pageCount %}
+                <a class="reset" href="{{ nextHref }}">Next →</a>
+            {% endif %}
+        </div>
+    {% endif %}
+</div>
+{% endblock %}
