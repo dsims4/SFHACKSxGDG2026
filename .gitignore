@@ -15,3 +15,9 @@ coverage/
 
 *.pem
 *.key
+
+# Local credential exports and confidential deployment files.
+confidential/
+credentials.json
+application_default_credentials.json
+*-service-account.json

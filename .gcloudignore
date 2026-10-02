@@ -1,0 +1,14 @@
+# Apply repository exclusions to manual Cloud Build source uploads too.
+.gcloudignore
+.git/
+#!include:.gitignore
+
+# Exclude even the environment template from uploaded build sources.
+.env
+.env.*
+confidential/
+*.pem
+*.key
+credentials.json
+application_default_credentials.json
+*-service-account.json

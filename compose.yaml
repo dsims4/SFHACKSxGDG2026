@@ -22,7 +22,9 @@ services:
 
   typesense:
     image: typesense/typesense:27.1
-    command: --data-dir /data --api-key=local-dev-key --enable-cors
+    command: --data-dir /data --enable-cors
+    environment:
+      TYPESENSE_API_KEY: "${TYPESENSE_API_KEY:?Set TYPESENSE_API_KEY in your local .env or shell}"
     ports:
       - "8108:8108"
     volumes:
@@ -38,7 +40,7 @@ services:
       DATABASE_URL: postgresql://rss@postgres:5432/rss
       PGPASSWORD: "${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in your local .env or shell}"
       TYPESENSE_URL: http://typesense:8108
-      TYPESENSE_API_KEY: local-dev-key
+      TYPESENSE_API_KEY: "${TYPESENSE_API_KEY:?Set TYPESENSE_API_KEY in your local .env or shell}"
       TYPESENSE_COLLECTION: timeline_entries
       RSS_ENABLED: "true"
       RSS_POLL_SECONDS: "600"

@@ -28,3 +28,7 @@ compose.previous.yaml
 compose.candidate.yaml
 compose.yaml.previous
 confidential/
+
+credentials.json
+application_default_credentials.json
+*-service-account.json
