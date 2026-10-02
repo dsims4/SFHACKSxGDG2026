@@ -33,7 +33,7 @@ steps:
       - "--port=3000"
       - "--execution-environment=gen2"
       - "--add-cloudsql-instances=${_INSTANCE_CONNECTION_NAME}"
-      - "--update-env-vars=INSTANCE_CONNECTION_NAME=${_INSTANCE_CONNECTION_NAME},DB_NAME=${_DB_NAME},DB_USER=${_DB_USER}"
+      - "--update-env-vars=INSTANCE_CONNECTION_NAME=${_INSTANCE_CONNECTION_NAME},DB_NAME=${_DB_NAME},DB_USER=${_DB_USER},RSS_ENABLED=true"
       # Reference the stored secret; no database password is included in this file.
       - "--update-secrets=DB_PASSWORD=${_DB_PASSWORD_SECRET}:latest"
       # Keep CPU available for RSS polling when there are no HTTP requests.

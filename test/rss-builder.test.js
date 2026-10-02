@@ -73,7 +73,7 @@ test("RSS is optional until configured, with explicit enable/disable and validat
     assert.equal(readConfig({}), null);
     assert.equal(readConfig({ RSS_ENABLED: "false", DATABASE_URL: "set", TYPESENSE_API_KEY: "set" }), null);
     assert.throws(() => readConfig({ RSS_ENABLED: "true" }), /DATABASE_URL/);
-    assert.throws(() => readConfig({ RSS_ENABLED: "true", DATABASE_URL: "set" }), /TYPESENSE_API_KEY/);
+    assert.equal(readConfig({ RSS_ENABLED: "true", DATABASE_URL: "set" }).typesenseAPIKey, null);
     assert.throws(() => readConfig({ RSS_ENABLED: "yes" }), /true or false/);
     const env = { DATABASE_URL: "set", TYPESENSE_API_KEY: "set" };
     assert.equal(readConfig(env).maxWorkers, 10);
@@ -344,21 +344,16 @@ test("backfill preserves existing IDs and adds location hints to older rows", as
     assert.deepEqual(imported.images, ["https://cdn.example/a.jpg"]);
 });
 
-test("a full poll reads the bundled feeds, commits candidates, and imports them", async (t) => {
+test("a full poll stores stories in PostgreSQL without Typesense credentials", async (t) => {
     const database = fakeDatabase();
-    let imported = 0;
     const date = new Date(Date.UTC(new Date().getUTCFullYear(), 0, 1)).toUTCString();
-    t.mock.method(global, "fetch", async (url, options) => {
-        if (url.startsWith(config.typesenseURL)) {
-            assert.equal(database.calls.at(-1).sql, "COMMIT");
-            const docs = options.body.split("\n");
-            imported += docs.length;
-            return new Response(docs.map(() => JSON.stringify({ success: true })).join("\n"));
-        }
+    t.mock.method(global, "fetch", async (url) => {
+        assert(!url.startsWith(config.typesenseURL));
         return new Response(rss(item("London news", date)));
     });
-    await fetchOnce(database, config);
-    assert.equal(imported, 17);
+    const stories = await fetchOnce(database, { ...config, typesenseAPIKey: null });
+    assert.equal(stories.length, 17);
+    assert.equal(database.calls.at(-1).sql, "COMMIT");
     assert.equal(database.released, 1);
 });
 
@@ -376,5 +371,72 @@ test("shutdown cancels an in-flight feed request and leaves a shared database po
     const builder = startRSSBuilder(config, database);
     await started;
     await builder.stop();
+    assert.equal(database.ended, 0);
+});
+
+test("the worker automatically ingests with PostgreSQL alone", { timeout: 3000 }, async (t) => {
+    const database = fakeDatabase();
+    let stored;
+    const committed = new Promise((resolve) => { stored = resolve; });
+    const query = database.query;
+    database.query = async (sql, values) => {
+        const result = await query(sql, values);
+        if (sql === "COMMIT" && database.calls.some((call) => call.sql.includes("INSERT INTO"))) stored();
+        return result;
+    };
+    const date = new Date(Date.UTC(new Date().getUTCFullYear(), 0, 1)).toUTCString();
+    t.mock.method(global, "fetch", async (url) => {
+        assert(!url.startsWith(config.typesenseURL));
+        return new Response(rss(item("Paris news", date)));
+    });
+    const databaseConfig = readConfig({ DATABASE_URL: "postgresql://unused" });
+    const builder = startRSSBuilder({ ...databaseConfig, typesenseURL: config.typesenseURL }, database);
+    t.after(() => builder.stop());
+    await committed;
+    await builder.stop();
+    assert(database.calls.some((call) => call.sql.includes("INSERT INTO entries")));
+    assert.equal(database.ended, 0);
+});
+
+test("search outages do not stop database writes and recovery backfills stored rows", { timeout: 3000 }, async (t) => {
+    const database = fakeDatabase();
+    let polls = 0;
+    let imports = 0;
+    let recovered;
+    const recovery = new Promise((resolve) => { recovered = resolve; });
+    const errors = [];
+    const query = database.query;
+    database.query = async (sql, values) => {
+        const result = await query(sql, values);
+        if (sql.includes("INSERT INTO entries")) polls++;
+        if (sql.includes("SELECT title, content, source")) {
+            return { rows: [{ ...makeStory(), images: [] }] };
+        }
+        return result;
+    };
+    t.mock.method(console, "error", (...args) => errors.push(args.join(" ")));
+    const date = new Date(Date.UTC(new Date().getUTCFullYear(), 0, 1)).toUTCString();
+    t.mock.method(global, "fetch", async (url, options) => {
+        if (!url.startsWith(config.typesenseURL)) return new Response(rss(item("Paris news", date)));
+        assert(polls > 0, "Stories must be saved before search is contacted.");
+        if (url.endsWith("/health")) {
+            return polls === 1 ? new Response("Unavailable", { status: 503 }) : Response.json({ ok: true });
+        }
+        if (url.includes("/documents/import")) {
+            const docs = options.body.split("\n").map(JSON.parse);
+            imports++;
+            // The first successful import comes from the database backfill.
+            if (imports === 1) assert.equal(docs[0].id, makeStory().id);
+            if (imports === 2) recovered();
+            return new Response(docs.map(() => JSON.stringify({ success: true })).join("\n"));
+        }
+        return Response.json({ fields: [{ name: "images" }] });
+    });
+    const builder = startRSSBuilder({ ...config, pollSeconds: 0.01 }, database);
+    t.after(() => builder.stop());
+    await recovery;
+    await builder.stop();
+    assert(polls >= 3);
+    assert(errors.some((error) => error.includes("Typesense sync failed")));
     assert.equal(database.ended, 0);
 });

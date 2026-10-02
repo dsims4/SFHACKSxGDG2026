@@ -110,10 +110,15 @@ gcloud secrets add-iam-policy-binding sfhacksxgdg2026-db-password \
 ## RSS worker
 
 `npm start` runs Express and the RSS worker in the same Node.js process. The worker
-starts automatically when PostgreSQL and `TYPESENSE_API_KEY` are configured. Configure
+starts automatically when PostgreSQL is configured, using the same connection pool
+as the database viewer. Cloud Run uses the attached Cloud SQL instance and the
+password injected from Secret Manager; local development uses `DATABASE_URL`.
+
+Typesense indexing is optional. Set `TYPESENSE_API_KEY` and configure
 `TYPESENSE_URL` with your Typesense server address; it defaults to
-`http://localhost:8108` for local development. PostgreSQL and Typesense must be
-provided separately. The web server stays available while the worker retries
+`http://localhost:8108` for local development. PostgreSQL must be provided separately;
+the Cloud SQL setup supplies it for Cloud Run. The web server stays available while
+the worker retries
 unavailable services. The PostgreSQL schema initializes at server startup even
 when RSS is disabled or Typesense is not configured.
 
@@ -127,12 +132,15 @@ npm run db:init
 The worker reads `rss-builder/feeds.json`, polls every 600 seconds, and fetches up
 to 10 feeds concurrently. It preserves the Python worker's current-year filtering,
 source exclusions, location hints, PostgreSQL table, and Typesense document IDs.
-Existing current-year database rows are indexed on startup. Imports are retried
-through a database backfill after a failed cycle.
+When Typesense is configured, current-year database rows are indexed after the
+first poll. Stories are saved to PostgreSQL before indexing. A search outage does
+not stop later database writes; indexing retries with a database backfill to repair
+missed imports.
 
 Optional environment settings are documented in `.env.example`. `RSS_ENABLED=false`
-disables polling even when credentials are present. `RSS_ENABLED=true` requires the
-credentials and fails startup if they are missing. Without credentials or an
+disables polling even when credentials are present. `RSS_ENABLED=true` requires
+database credentials and fails startup if they are missing. Without database
+credentials or an
 explicit enable setting, the index page still runs and RSS is disabled.
 
 Run the worker checks without live PostgreSQL, Typesense, or news services:
@@ -167,7 +175,7 @@ environment variables. The app's connection URL contains no password.
 
 `cloudbuild.yaml` deploys this image to `sfhacksxgdg2026-git` in `us-west2`.
 The deployment attaches Cloud SQL and injects its password from Secret Manager.
-Configure the Typesense URL and API key separately on that Cloud Run service,
+The deployment enables RSS polling. Configure the optional Typesense URL and API key separately on that Cloud Run service,
 using Secret Manager for the API key. Deployment preserves other environment settings.
 
 The deployment keeps at least one instance running with CPU available between
@@ -215,7 +223,7 @@ an application file volume is not required. This follows Google's
 [Cloud Run connection setup](https://docs.cloud.google.com/sql/docs/postgres/connect-run).
 
 Look for `PostgreSQL database initialized.` in the Cloud Run logs after deployment.
-RSS starts after initialization when its Typesense settings are configured. To
+RSS starts after database initialization, including when Typesense is not configured. To
 print the website URL:
 
 ```bash

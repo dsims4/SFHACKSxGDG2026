@@ -155,7 +155,7 @@ const server = app.listen(port, () => {
                 shutdown(1);
             });
         } else {
-            console.log("RSS builder disabled. Configure TYPESENSE_API_KEY and TYPESENSE_URL to enable it.");
+            console.log("RSS builder disabled by RSS_ENABLED=false.");
         }
     });
     databaseReady.catch((error) => {

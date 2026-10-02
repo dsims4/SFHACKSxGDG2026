@@ -44,17 +44,16 @@ function readConfig(env = process.env) {
 
     const databaseConfig = readDatabaseConfig(env);
     const enabled = env.RSS_ENABLED === undefined
-        ? Boolean(databaseConfig && env.TYPESENSE_API_KEY)
+        ? Boolean(databaseConfig)
         : env.RSS_ENABLED === "true";
 
     if (!enabled) return null;
     if (!databaseConfig) throw new Error("DATABASE_URL or INSTANCE_CONNECTION_NAME is required for RSS.");
-    if (!env.TYPESENSE_API_KEY) throw new Error("TYPESENSE_API_KEY is required for RSS.");
 
     return {
         databaseConfig,
         typesenseURL: (env.TYPESENSE_URL || "http://localhost:8108").replace(/\/+$/, ""),
-        typesenseAPIKey: env.TYPESENSE_API_KEY,
+        typesenseAPIKey: env.TYPESENSE_API_KEY || null,
         typesenseCollection: env.TYPESENSE_COLLECTION || "timeline_entries",
         feedsFile: env.FEEDS_FILE || path.join(__dirname, "feeds.json"),
         pollSeconds: readPositiveInteger(env.RSS_POLL_SECONDS, 600, "RSS_POLL_SECONDS"),
@@ -508,7 +507,7 @@ async function fetchOnce(database, config, signal) {
     const feeds = await loadFeeds(config.feedsFile);
     if (!feeds.length) {
         console.log("No feeds configured.");
-        return;
+        return [];
     }
 
     const start = Date.now();
@@ -530,9 +529,9 @@ async function fetchOnce(database, config, signal) {
 
     signal?.throwIfAborted();
     await insertStories(database, stories);
-    await upsertTypesenseDocuments(stories, config, signal);
     const elapsed = ((Date.now() - start) / 1000).toFixed(1);
-    console.log(`Processed ${stories.length} candidates from ${feeds.length} feeds in ${elapsed}s (${failed} feeds failed) and synced Typesense`);
+    console.log(`Stored ${stories.length} candidates in PostgreSQL from ${feeds.length} feeds in ${elapsed}s (${failed} feeds failed)`);
+    return stories;
 }
 
 // Start asynchronously so database or search outages do not block the web server.
@@ -544,24 +543,43 @@ function startRSSBuilder(config, database) {
 
     async function run() {
         let initialized = false;
+        let searchReady = false;
         try {
             while (!signal.aborted) {
                 let delay = config.pollSeconds * 1000;
                 try {
                     if (!initialized) {
                         await ensureSchema(pool);
-                        await ensureTypesenseCollection(config, signal);
-                        await backfillTypesense(pool, config, signal);
                         initialized = true;
                         console.log("RSS builder started.");
+                        if (!config.typesenseAPIKey) {
+                            console.log("Typesense indexing disabled. RSS stories will be stored in PostgreSQL.");
+                        }
                     }
-                    await fetchOnce(pool, config, signal);
+                    const stories = await fetchOnce(pool, config, signal);
+
+                    if (config.typesenseAPIKey) {
+                        try {
+                            if (!searchReady) {
+                                await ensureTypesenseCollection(config, signal);
+                                // Include this poll and any rows saved during a search outage.
+                                await backfillTypesense(pool, config, signal);
+                                searchReady = true;
+                            } else {
+                                await upsertTypesenseDocuments(stories, config, signal);
+                            }
+                        } catch (error) {
+                            if (signal.aborted) break;
+                            searchReady = false;
+                            console.error("Typesense sync failed; PostgreSQL stories are saved and indexing will retry:", error.message);
+                        }
+                    }
                 } catch (error) {
                     if (signal.aborted) break;
                     console.error("RSS cycle failed:", error.message);
                     delay = initialized ? delay : 3000;
-                    // Backfill again after an import failure to repair committed rows.
                     initialized = false;
+                    searchReady = false;
                 }
                 await sleep(delay, undefined, { signal });
             }

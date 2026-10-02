@@ -1,5 +1,5 @@
 # Local stack: web app, PostgreSQL for the RSS worker, and Typesense.
-# RSS stays off unless both DATABASE_URL and TYPESENSE_API_KEY are set.
+# RSS stores stories in PostgreSQL; Typesense adds optional search indexing.
 
 services:
   postgres:

@@ -21,7 +21,8 @@ test("PostgreSQL accepts local URLs or Cloud SQL sockets and requires a Cloud SQ
     assert.equal(readDatabaseConfig({ ...env, DB_NAME: "other", DB_USER: "reader" }).user, "reader");
     assert.throws(() => readDatabaseConfig({ ...env, DB_PASSWORD: "" }), /DB_PASSWORD/);
     assert.throws(() => readDatabaseConfig({ ...env, INSTANCE_CONNECTION_NAME: "bad/name" }), /project:region:instance/);
-    assert.equal(readConfig(env), null);
+    assert.equal(readConfig(env).databaseConfig.host, `/cloudsql/${env.INSTANCE_CONNECTION_NAME}`);
+    assert.equal(readConfig(env).typesenseAPIKey, null);
     assert.equal(readConfig({ ...env, TYPESENSE_API_KEY: "key" }).databaseConfig.host, `/cloudsql/${env.INSTANCE_CONNECTION_NAME}`);
 });
 
