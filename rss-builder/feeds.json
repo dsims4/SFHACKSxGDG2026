@@ -1,0 +1,72 @@
+{
+  "feeds": [
+    {
+      "name": "New York Times",
+      "url": "https://rss.nytimes.com/services/xml/rss/nyt/World.xml"
+    },
+    {
+      "name": "BBC News",
+      "url": "https://feeds.bbci.co.uk/news/world/rss.xml"
+    },
+    {
+      "name": "Associated Press",
+      "url": "https://feedx.net/rss/ap.xml"
+    },
+    {
+      "name": "Reuters",
+      "url": "https://news.google.com/rss/search?q=site%3Areuters.com&hl=en-US&gl=US&ceid=US%3Aen"
+    },
+    {
+      "name": "NPR News",
+      "url": "https://feeds.npr.org/1001/rss.xml"
+    },
+    {
+      "name": "Politico",
+      "url": "https://rss.politico.com/politics-news.xml"
+    },
+    {
+      "name": "Wall Street Journal",
+      "url": "https://feeds.content.dowjones.io/public/rss/RSSWorldNews"
+    },
+    {
+      "name": "The Economist",
+      "url": "https://www.economist.com/finance-and-economics/rss.xml"
+    },
+    {
+      "name": "ABC News",
+      "url": "https://abcnews.com/abcnews/topstories"
+    },
+    {
+      "name": "NBC News",
+      "url": "https://feeds.nbcnews.com/nbcnews/public/news"
+    },
+    {
+      "name": "Polygon",
+      "url": "https://www.polygon.com/feed/gaming/"
+    },
+    {
+      "name": "WIRED",
+      "url": "https://www.wired.com/feed/rss"
+    },
+    {
+      "name": "Digital Trends",
+      "url": "https://www.digitaltrends.com/feed/"
+    },
+    {
+      "name": "Business Insider",
+      "url": "https://feeds.businessinsider.com/custom/all"
+    },
+    {
+      "name": "CNET",
+      "url": "https://www.cnet.com/rss/news/"
+    },
+    {
+      "name": "TIME",
+      "url": "https://time.com/feed/"
+    },
+    {
+      "name": "Axios",
+      "url": "https://api.axios.com/feed/"
+    }
+  ]
+}
