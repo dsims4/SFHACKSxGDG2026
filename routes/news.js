@@ -1,6 +1,6 @@
 const express = require("express");
 
-const articleFields = "e.id::text AS id, s.topic, e.topics, e.title, e.link, e.images, s.summary";
+const articleFields = "e.id::text AS id, s.topic, e.topics, e.title, e.link, jsonb_path_query_array(CASE WHEN jsonb_typeof(e.images) = 'array' THEN e.images ELSE '[]'::jsonb END, '$[0 to 2]') AS images, s.summary";
 function validID(value) {
     return typeof value === "string" && /^[1-9][0-9]{0,18}$/.test(value) && BigInt(value) <= 9223372036854775807n;
 }
