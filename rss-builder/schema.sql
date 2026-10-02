@@ -1,0 +1,30 @@
+CREATE TABLE IF NOT EXISTS entries (
+    id BIGSERIAL PRIMARY KEY,
+    title TEXT,
+    content TEXT NOT NULL,
+    source TEXT NOT NULL,
+    publication_date TIMESTAMPTZ NOT NULL,
+    link TEXT,
+    created_at TIMESTAMPTZ DEFAULT NOW(),
+    UNIQUE (source, link)
+);
+
+ALTER TABLE entries ADD COLUMN IF NOT EXISTS location_name TEXT;
+
+ALTER TABLE entries ADD COLUMN IF NOT EXISTS location_level TEXT;
+
+ALTER TABLE entries ADD COLUMN IF NOT EXISTS location_country TEXT;
+
+ALTER TABLE entries ADD COLUMN IF NOT EXISTS location_lat DOUBLE PRECISION;
+
+ALTER TABLE entries ADD COLUMN IF NOT EXISTS location_lng DOUBLE PRECISION;
+
+ALTER TABLE entries ADD COLUMN IF NOT EXISTS country_lat DOUBLE PRECISION;
+
+ALTER TABLE entries ADD COLUMN IF NOT EXISTS country_lng DOUBLE PRECISION;
+
+ALTER TABLE entries ADD COLUMN IF NOT EXISTS has_location BOOLEAN DEFAULT FALSE;
+
+CREATE INDEX IF NOT EXISTS idx_entries_publication_date ON entries (publication_date DESC);
+
+CREATE INDEX IF NOT EXISTS idx_entries_source ON entries (source);

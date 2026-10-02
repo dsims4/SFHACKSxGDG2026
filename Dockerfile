@@ -12,6 +12,9 @@ RUN npm ci --omit=dev
 # Copy the application source.
 COPY . .
 
+# Verify the RSS worker without contacting external services.
+RUN npm test
+
 ENV NODE_ENV=production
 
 # Run as the non-root user included in the Node image.
@@ -19,4 +22,5 @@ USER node
 
 EXPOSE 3000
 
-CMD ["npm", "start"]
+# Run Node directly so it receives Cloud Run's shutdown signal.
+CMD ["node", "server.js"]

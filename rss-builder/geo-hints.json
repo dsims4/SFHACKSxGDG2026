@@ -1,0 +1,502 @@
+[
+    {
+        "alias": "new york city",
+        "name": "New York City",
+        "level": "city",
+        "country": "United States",
+        "lat": 40.7128,
+        "lng": -74.006,
+        "country_lat": 39.5,
+        "country_lng": -98.35
+    },
+    {
+        "alias": "washington dc",
+        "name": "Washington DC",
+        "level": "city",
+        "country": "United States",
+        "lat": 38.9072,
+        "lng": -77.0369,
+        "country_lat": 39.5,
+        "country_lng": -98.35
+    },
+    {
+        "alias": "los angeles",
+        "name": "Los Angeles",
+        "level": "city",
+        "country": "United States",
+        "lat": 34.0522,
+        "lng": -118.2437,
+        "country_lat": 39.5,
+        "country_lng": -98.35
+    },
+    {
+        "alias": "san francisco",
+        "name": "San Francisco",
+        "level": "city",
+        "country": "United States",
+        "lat": 37.7749,
+        "lng": -122.4194,
+        "country_lat": 39.5,
+        "country_lng": -98.35
+    },
+    {
+        "alias": "london",
+        "name": "London",
+        "level": "city",
+        "country": "United Kingdom",
+        "lat": 51.5074,
+        "lng": -0.1278,
+        "country_lat": 54.8,
+        "country_lng": -4.6
+    },
+    {
+        "alias": "paris",
+        "name": "Paris",
+        "level": "city",
+        "country": "France",
+        "lat": 48.8566,
+        "lng": 2.3522,
+        "country_lat": 46.2,
+        "country_lng": 2.2
+    },
+    {
+        "alias": "berlin",
+        "name": "Berlin",
+        "level": "city",
+        "country": "Germany",
+        "lat": 52.52,
+        "lng": 13.405,
+        "country_lat": 51.2,
+        "country_lng": 10.4
+    },
+    {
+        "alias": "rome",
+        "name": "Rome",
+        "level": "city",
+        "country": "Italy",
+        "lat": 41.9028,
+        "lng": 12.4964,
+        "country_lat": 41.9,
+        "country_lng": 12.5
+    },
+    {
+        "alias": "madrid",
+        "name": "Madrid",
+        "level": "city",
+        "country": "Spain",
+        "lat": 40.4168,
+        "lng": -3.7038,
+        "country_lat": 40.4,
+        "country_lng": -3.7
+    },
+    {
+        "alias": "kyiv",
+        "name": "Kyiv",
+        "level": "city",
+        "country": "Ukraine",
+        "lat": 50.4501,
+        "lng": 30.5234,
+        "country_lat": 49.0,
+        "country_lng": 31.3
+    },
+    {
+        "alias": "moscow",
+        "name": "Moscow",
+        "level": "city",
+        "country": "Russia",
+        "lat": 55.7558,
+        "lng": 37.6173,
+        "country_lat": 61.5,
+        "country_lng": 105.3
+    },
+    {
+        "alias": "beijing",
+        "name": "Beijing",
+        "level": "city",
+        "country": "China",
+        "lat": 39.9042,
+        "lng": 116.4074,
+        "country_lat": 35.8,
+        "country_lng": 104.1
+    },
+    {
+        "alias": "shanghai",
+        "name": "Shanghai",
+        "level": "city",
+        "country": "China",
+        "lat": 31.2304,
+        "lng": 121.4737,
+        "country_lat": 35.8,
+        "country_lng": 104.1
+    },
+    {
+        "alias": "tokyo",
+        "name": "Tokyo",
+        "level": "city",
+        "country": "Japan",
+        "lat": 35.6762,
+        "lng": 139.6503,
+        "country_lat": 36.2,
+        "country_lng": 138.3
+    },
+    {
+        "alias": "seoul",
+        "name": "Seoul",
+        "level": "city",
+        "country": "South Korea",
+        "lat": 37.5665,
+        "lng": 126.978,
+        "country_lat": 36.5,
+        "country_lng": 127.8
+    },
+    {
+        "alias": "taipei",
+        "name": "Taipei",
+        "level": "city",
+        "country": "Taiwan",
+        "lat": 25.033,
+        "lng": 121.5654,
+        "country_lat": 23.7,
+        "country_lng": 121.0
+    },
+    {
+        "alias": "delhi",
+        "name": "Delhi",
+        "level": "city",
+        "country": "India",
+        "lat": 28.6139,
+        "lng": 77.209,
+        "country_lat": 22.9,
+        "country_lng": 79.0
+    },
+    {
+        "alias": "mumbai",
+        "name": "Mumbai",
+        "level": "city",
+        "country": "India",
+        "lat": 19.076,
+        "lng": 72.8777,
+        "country_lat": 22.9,
+        "country_lng": 79.0
+    },
+    {
+        "alias": "islamabad",
+        "name": "Islamabad",
+        "level": "city",
+        "country": "Pakistan",
+        "lat": 33.6844,
+        "lng": 73.0479,
+        "country_lat": 30.4,
+        "country_lng": 69.3
+    },
+    {
+        "alias": "jerusalem",
+        "name": "Jerusalem",
+        "level": "city",
+        "country": "Israel",
+        "lat": 31.7683,
+        "lng": 35.2137,
+        "country_lat": 31.0,
+        "country_lng": 35.0
+    },
+    {
+        "alias": "gaza",
+        "name": "Gaza",
+        "level": "city",
+        "country": "Palestine",
+        "lat": 31.5018,
+        "lng": 34.4668,
+        "country_lat": 31.9,
+        "country_lng": 35.2
+    },
+    {
+        "alias": "tehran",
+        "name": "Tehran",
+        "level": "city",
+        "country": "Iran",
+        "lat": 35.6892,
+        "lng": 51.389,
+        "country_lat": 32.4,
+        "country_lng": 53.7
+    },
+    {
+        "alias": "baghdad",
+        "name": "Baghdad",
+        "level": "city",
+        "country": "Iraq",
+        "lat": 33.3152,
+        "lng": 44.3661,
+        "country_lat": 33.2,
+        "country_lng": 43.7
+    },
+    {
+        "alias": "cairo",
+        "name": "Cairo",
+        "level": "city",
+        "country": "Egypt",
+        "lat": 30.0444,
+        "lng": 31.2357,
+        "country_lat": 26.8,
+        "country_lng": 30.8
+    },
+    {
+        "alias": "lagos",
+        "name": "Lagos",
+        "level": "city",
+        "country": "Nigeria",
+        "lat": 6.5244,
+        "lng": 3.3792,
+        "country_lat": 9.1,
+        "country_lng": 8.7
+    },
+    {
+        "alias": "nairobi",
+        "name": "Nairobi",
+        "level": "city",
+        "country": "Kenya",
+        "lat": -1.2921,
+        "lng": 36.8219,
+        "country_lat": 0.3,
+        "country_lng": 37.9
+    },
+    {
+        "alias": "sydney",
+        "name": "Sydney",
+        "level": "city",
+        "country": "Australia",
+        "lat": -33.8688,
+        "lng": 151.2093,
+        "country_lat": -25.3,
+        "country_lng": 133.8
+    },
+    {
+        "alias": "toronto",
+        "name": "Toronto",
+        "level": "city",
+        "country": "Canada",
+        "lat": 43.6532,
+        "lng": -79.3832,
+        "country_lat": 56.1,
+        "country_lng": -106.3
+    },
+    {
+        "alias": "mexico city",
+        "name": "Mexico City",
+        "level": "city",
+        "country": "Mexico",
+        "lat": 19.4326,
+        "lng": -99.1332,
+        "country_lat": 23.6,
+        "country_lng": -102.5
+    },
+    {
+        "alias": "brazil",
+        "name": "Brazil",
+        "level": "country",
+        "country": "Brazil",
+        "lat": -14.235,
+        "lng": -51.9253,
+        "country_lat": -14.235,
+        "country_lng": -51.9253
+    },
+    {
+        "alias": "united states",
+        "name": "United States",
+        "level": "country",
+        "country": "United States",
+        "lat": 39.5,
+        "lng": -98.35,
+        "country_lat": 39.5,
+        "country_lng": -98.35
+    },
+    {
+        "alias": "ukraine",
+        "name": "Ukraine",
+        "level": "country",
+        "country": "Ukraine",
+        "lat": 49.0,
+        "lng": 31.3,
+        "country_lat": 49.0,
+        "country_lng": 31.3
+    },
+    {
+        "alias": "russia",
+        "name": "Russia",
+        "level": "country",
+        "country": "Russia",
+        "lat": 61.5,
+        "lng": 105.3,
+        "country_lat": 61.5,
+        "country_lng": 105.3
+    },
+    {
+        "alias": "china",
+        "name": "China",
+        "level": "country",
+        "country": "China",
+        "lat": 35.8,
+        "lng": 104.1,
+        "country_lat": 35.8,
+        "country_lng": 104.1
+    },
+    {
+        "alias": "japan",
+        "name": "Japan",
+        "level": "country",
+        "country": "Japan",
+        "lat": 36.2,
+        "lng": 138.3,
+        "country_lat": 36.2,
+        "country_lng": 138.3
+    },
+    {
+        "alias": "india",
+        "name": "India",
+        "level": "country",
+        "country": "India",
+        "lat": 22.9,
+        "lng": 79.0,
+        "country_lat": 22.9,
+        "country_lng": 79.0
+    },
+    {
+        "alias": "canada",
+        "name": "Canada",
+        "level": "country",
+        "country": "Canada",
+        "lat": 56.1,
+        "lng": -106.3,
+        "country_lat": 56.1,
+        "country_lng": -106.3
+    },
+    {
+        "alias": "mexico",
+        "name": "Mexico",
+        "level": "country",
+        "country": "Mexico",
+        "lat": 23.6,
+        "lng": -102.5,
+        "country_lat": 23.6,
+        "country_lng": -102.5
+    },
+    {
+        "alias": "iran",
+        "name": "Iran",
+        "level": "country",
+        "country": "Iran",
+        "lat": 32.4,
+        "lng": 53.7,
+        "country_lat": 32.4,
+        "country_lng": 53.7
+    },
+    {
+        "alias": "iraq",
+        "name": "Iraq",
+        "level": "country",
+        "country": "Iraq",
+        "lat": 33.2,
+        "lng": 43.7,
+        "country_lat": 33.2,
+        "country_lng": 43.7
+    },
+    {
+        "alias": "israel",
+        "name": "Israel",
+        "level": "country",
+        "country": "Israel",
+        "lat": 31.0,
+        "lng": 35.0,
+        "country_lat": 31.0,
+        "country_lng": 35.0
+    },
+    {
+        "alias": "palestine",
+        "name": "Palestine",
+        "level": "country",
+        "country": "Palestine",
+        "lat": 31.9,
+        "lng": 35.2,
+        "country_lat": 31.9,
+        "country_lng": 35.2
+    },
+    {
+        "alias": "germany",
+        "name": "Germany",
+        "level": "country",
+        "country": "Germany",
+        "lat": 51.2,
+        "lng": 10.4,
+        "country_lat": 51.2,
+        "country_lng": 10.4
+    },
+    {
+        "alias": "france",
+        "name": "France",
+        "level": "country",
+        "country": "France",
+        "lat": 46.2,
+        "lng": 2.2,
+        "country_lat": 46.2,
+        "country_lng": 2.2
+    },
+    {
+        "alias": "italy",
+        "name": "Italy",
+        "level": "country",
+        "country": "Italy",
+        "lat": 41.9,
+        "lng": 12.5,
+        "country_lat": 41.9,
+        "country_lng": 12.5
+    },
+    {
+        "alias": "spain",
+        "name": "Spain",
+        "level": "country",
+        "country": "Spain",
+        "lat": 40.4,
+        "lng": -3.7,
+        "country_lat": 40.4,
+        "country_lng": -3.7
+    },
+    {
+        "alias": "united kingdom",
+        "name": "United Kingdom",
+        "level": "country",
+        "country": "United Kingdom",
+        "lat": 54.8,
+        "lng": -4.6,
+        "country_lat": 54.8,
+        "country_lng": -4.6
+    },
+    {
+        "alias": "australia",
+        "name": "Australia",
+        "level": "country",
+        "country": "Australia",
+        "lat": -25.3,
+        "lng": 133.8,
+        "country_lat": -25.3,
+        "country_lng": 133.8
+    },
+    {
+        "alias": "nigeria",
+        "name": "Nigeria",
+        "level": "country",
+        "country": "Nigeria",
+        "lat": 9.1,
+        "lng": 8.7,
+        "country_lat": 9.1,
+        "country_lng": 8.7
+    },
+    {
+        "alias": "egypt",
+        "name": "Egypt",
+        "level": "country",
+        "country": "Egypt",
+        "lat": 26.8,
+        "lng": 30.8,
+        "country_lat": 26.8,
+        "country_lng": 30.8
+    }
+]

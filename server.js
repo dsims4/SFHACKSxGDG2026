@@ -16,6 +16,8 @@ const helmet = require("helmet");
 const path = require("path");
 
 const publicRouter = require("./routes/public");
+const { readConfig, startRSSBuilder } = require("./rss-builder/rss_builder");
+const rssConfig = readConfig();
 
 // This object is the complete Express application configured below.
 const app = express();
@@ -121,6 +123,47 @@ app.use((error, req, res, next) => {
 });
 
 // Start the server after middleware and routes are ready.
-app.listen(port, () => {
+let rssBuilder = null;
+let shuttingDown = false;
+
+const server = app.listen(port, () => {
     console.log(`Server is running at http://localhost:${port}`);
+    rssBuilder = startRSSBuilder(rssConfig);
+
+    if (rssBuilder) {
+        rssBuilder.done.catch((error) => {
+            console.error("RSS builder stopped unexpectedly:", error);
+            shutdown(1);
+        });
+    } else {
+        console.log("RSS builder disabled. Configure DATABASE_URL and TYPESENSE_API_KEY to enable it.");
+    }
 });
+
+// Cloud Run sends SIGTERM before stopping an instance. Cancel polling and close
+// database connections along with the HTTP server.
+async function shutdown(exitCode = 0) {
+    if (shuttingDown) return;
+    shuttingDown = true;
+
+    const timeout = setTimeout(() => process.exit(1), 9000);
+    timeout.unref();
+
+    try {
+        await Promise.all([
+            new Promise((resolve, reject) => {
+                server.close((error) => error ? reject(error) : resolve());
+            }),
+            rssBuilder?.stop()
+        ]);
+        process.exitCode = exitCode;
+    } catch (error) {
+        console.error("Shutdown failed:", error);
+        process.exitCode = 1;
+    } finally {
+        clearTimeout(timeout);
+    }
+}
+
+process.on("SIGTERM", () => shutdown());
+process.on("SIGINT", () => shutdown());
