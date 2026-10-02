@@ -95,14 +95,14 @@ test("date filtering respects UTC year boundaries, invalid dates, and future sto
     assert.equal(inCurrentYearWindow(null, now), false);
 });
 
-test("source exclusions and summary preference match the Python worker", () => {
+test("source exclusions are retained while full feed content takes priority", () => {
     assert.equal(shouldSkip("Other", "Opinion | A story", ""), true);
     assert.equal(shouldSkip("CNET", "Offers", "Today's deals"), true);
     assert.equal(shouldSkip("ABC News", "LIVE: Updates", ""), true);
     assert.equal(shouldSkip("BBC News", "Watch: Event", ""), true);
     assert.equal(shouldSkip("New York Times", "News", "Here is the latest"), true);
     assert.equal(shouldSkip("Reuters", "Live: Event", ""), false);
-    assert.equal(getContent({ summary: "Summary", content: "Full text" }), "Summary");
+    assert.equal(getContent({ summary: "Summary", content: "Full text" }), "Full text");
     assert.equal(getContent({ "content:encoded": "Full text" }), "Full text");
 });
 
@@ -147,7 +147,7 @@ test("RSS parsing handles CDATA, content fallback, dates, Reuters titles, and ex
     assert.equal(result.error, null);
     assert.equal(result.entries.length, 2);
     assert.equal(result.entries[0].title, "Paris & London");
-    assert.equal(result.entries[0].content, "<p>Summary</p></item>");
+    assert.equal(result.entries[0].content, "Full text");
     assert.equal(result.entries[1].content, "Full text");
     assert.equal(result.entries[1].link, null);
     assert.equal(result.entries[1].location_name, "Tokyo");
@@ -172,7 +172,7 @@ test("Atom summaries, published dates, and updated-only entries are supported", 
     });
     assert.equal(result.error, null);
     assert.equal(result.entries.length, 2);
-    assert.equal(result.entries[0].content, "<p>Summary</p>");
+    assert.equal(result.entries[0].content, "Full text");
     assert.equal(result.entries[0].publication_date.toISOString(), "2026-03-01T12:00:00.000Z");
     assert.equal(result.entries[1].publication_date.toISOString(), "2026-03-01T12:00:00.000Z");
     assert.match(result.entries[0].item_xml, /<entry>[\s\S]*London news[\s\S]*<\/entry>/);
@@ -219,7 +219,9 @@ test("batched SQL uses parameters, commits all batches, and rolls back failed in
     assert.equal(inserts[1].values[13], "[]");
     assert(!inserts[0].sql.includes(story.title));
     assert.match(inserts[0].sql, /item_xml/);
-    assert.match(inserts[0].sql, /ON CONFLICT \(source, link\) DO UPDATE SET\s+images = EXCLUDED\.images,\s+item_xml = COALESCE\(EXCLUDED\.item_xml, entries\.item_xml\)/);
+    assert.match(inserts[0].sql, /ON CONFLICT \(source, link\) DO UPDATE SET\s+content = EXCLUDED\.content/);
+    assert.match(inserts[0].sql, /location_name = EXCLUDED\.location_name/);
+    assert.match(inserts[0].sql, /images = EXCLUDED\.images,\s+item_xml = COALESCE\(EXCLUDED\.item_xml, entries\.item_xml\)/);
     assert.equal(database.calls.at(-1).sql, "COMMIT");
     assert.equal(database.released, 1);
 

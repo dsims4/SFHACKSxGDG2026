@@ -130,3 +130,285 @@
 .story-extractions a:hover {
     background-color: #eeeeee;
 }
+body.viewer-page main {
+    align-items: stretch;
+    justify-content: flex-start;
+}
+
+.viewer {
+    width: min(calc(100% - 2rem), 72rem);
+    margin: 1.5rem auto 3rem;
+}
+
+.viewer h1,
+.viewer p {
+    margin: 0 0 1rem;
+}
+
+.viewer form {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.75rem;
+    align-items: end;
+    margin-bottom: 1rem;
+}
+
+.viewer input {
+    display: block;
+    margin-top: 0.25rem;
+    min-width: 16rem;
+    padding: 0.4rem 0.5rem;
+    border: var(--border-strong);
+    font: inherit;
+}
+
+.viewer button {
+    padding: 0.45rem 0.8rem;
+    border: var(--border-strong);
+    background: var(--color-surface);
+    font: inherit;
+    cursor: pointer;
+}
+
+.viewer th a {
+    color: inherit;
+    font-weight: 650;
+    text-decoration: none;
+}
+
+.viewer-message {
+    padding: 1rem;
+    border: var(--border-strong);
+}
+
+.viewer-table-wrap {
+    overflow-x: auto;
+    border: var(--border-strong);
+}
+
+.viewer table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 0.9rem;
+}
+
+.viewer th,
+.viewer td {
+    padding: 0.55rem 0.75rem;
+    border-bottom: 1px solid var(--color-ink);
+    text-align: left;
+    vertical-align: top;
+}
+
+.viewer td {
+    overflow-wrap: anywhere;
+}
+
+.viewer th {
+    background: #f4f4f4;
+    white-space: nowrap;
+    vertical-align: bottom;
+}
+
+.viewer td:last-child {
+    min-width: 16rem;
+    max-width: 28rem;
+}
+
+.viewer nav {
+    display: flex;
+    gap: 1rem;
+    align-items: center;
+    margin-top: 1rem;
+}
+
+body.dbviewer-page {
+    background: linear-gradient(180deg, #070f1d 0%, #091327 100%);
+    color: #e9f1ff;
+}
+
+.dbviewer {
+    width: min(1280px, 98vw);
+    margin: 0 auto;
+    padding: 1rem 0 2.5rem;
+}
+
+.dbviewer h1 {
+    margin: 0;
+    font-size: 1.35rem;
+    letter-spacing: 0.04em;
+}
+
+.dbviewer .sub {
+    margin: 0.4rem 0 1rem;
+    color: #a3b5d4;
+    font-size: 0.9rem;
+}
+
+.dbviewer .sub a {
+    color: #7ec5ff;
+}
+
+.dbviewer .filters {
+    display: grid;
+    gap: 0.6rem;
+    padding: 0.75rem;
+    border: 1px solid #2d4775;
+    border-radius: 12px;
+    background: #0f1d34;
+}
+
+.dbviewer .row {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem 0.75rem;
+    align-items: flex-end;
+}
+
+.dbviewer label {
+    display: flex;
+    flex-direction: column;
+    gap: 0.2rem;
+    color: #a3b5d4;
+    font-size: 0.78rem;
+}
+
+.dbviewer input,
+.dbviewer select,
+.dbviewer button,
+.dbviewer .reset {
+    padding: 0.45rem 0.6rem;
+    border: 1px solid #2d4775;
+    border-radius: 8px;
+    background: #122442;
+    color: #e9f1ff;
+    font: inherit;
+    font-size: 0.88rem;
+}
+
+.dbviewer input[type="search"] {
+    min-width: 200px;
+    max-width: 420px;
+}
+
+.dbviewer select {
+    min-width: 8rem;
+}
+
+.dbviewer button,
+.dbviewer .reset {
+    cursor: pointer;
+    text-decoration: none;
+}
+
+.dbviewer button.primary {
+    border-color: #71adff;
+    background: linear-gradient(120deg, #3876dd 0%, #3b89ef 100%);
+}
+
+.dbviewer .meta {
+    margin: 0.85rem 0 0.5rem;
+    color: #a3b5d4;
+    font-size: 0.85rem;
+}
+
+.dbviewer .viewer-message {
+    border-color: #2d4775;
+    background: #0f1d34;
+}
+
+.dbviewer .table-wrap {
+    max-height: min(70vh, 900px);
+    overflow: auto;
+    border: 1px solid #2d4775;
+    border-radius: 12px;
+    background: #0b162a;
+}
+
+.dbviewer table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 0.82rem;
+}
+
+.dbviewer th,
+.dbviewer td {
+    padding: 0.5rem 0.55rem;
+    border-bottom: 1px solid #27406a;
+    text-align: left;
+    vertical-align: top;
+}
+
+.dbviewer th {
+    position: sticky;
+    top: 0;
+    z-index: 1;
+    background: #11213d;
+    color: #7ec5ff;
+    white-space: nowrap;
+}
+
+.dbviewer tr:hover td {
+    background: rgba(79, 146, 255, 0.06);
+}
+
+.dbviewer .cell-content {
+    max-width: 360px;
+    max-height: 4.2em;
+    overflow: hidden;
+    word-break: break-word;
+    white-space: pre-line;
+}
+
+.dbviewer .cell-content.open {
+    max-height: none;
+}
+
+.dbviewer .cell-xml {
+    max-width: 420px;
+    white-space: pre-wrap;
+}
+
+.dbviewer .image-list {
+    display: flex;
+    flex-direction: column;
+    gap: 0.25rem;
+    max-width: 220px;
+}
+
+.dbviewer .row-link {
+    color: #dcebff;
+    text-decoration: none;
+}
+
+.dbviewer .row-link:hover {
+    color: #9fd0ff;
+    text-decoration: underline;
+}
+
+.dbviewer .toggle-more {
+    display: inline-block;
+    margin-top: 0.25rem;
+    padding: 0;
+    border: 0;
+    background: transparent;
+    color: #4f92ff;
+    font-size: 0.78rem;
+    cursor: pointer;
+}
+
+.dbviewer .toggle-more[hidden] {
+    display: none;
+}
+
+.dbviewer .muted {
+    color: #a3b5d4;
+}
+
+.dbviewer .pager {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+    align-items: center;
+    margin-top: 0.75rem;
+}

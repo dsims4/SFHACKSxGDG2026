@@ -17,6 +17,8 @@ const nunjucks = require("nunjucks");
 const helmet = require("helmet");
 const path = require("path");
 
+const { createNewsRouter } = require("./routes/news");
+const { startNewsAnalysis } = require("./services/news-analysis");
 const publicRouter = require("./routes/public");
 const { createViewerRouter } = require("./routes/viewer");
 const { createDbViewerRouter } = require("./routes/dbviewer");
@@ -84,6 +86,7 @@ app.use(express.urlencoded({
 app.use(express.static(path.join(__dirname, "public")));
 
 // Mount the public pages before the shared error handlers.
+app.use("/api", createNewsRouter(database));
 app.use("/", publicRouter);
 app.use("/", createViewerRouter(database));
 app.use("/", createDbViewerRouter(database));
@@ -133,6 +136,7 @@ app.use((error, req, res, next) => {
 
 // Start the server after middleware and routes are ready.
 let rssBuilder = null;
+let newsAnalysis = null;
 let shuttingDown = false;
 const databaseController = new AbortController();
 let databaseReady = Promise.resolve();
@@ -148,6 +152,7 @@ const server = app.listen(port, () => {
         if (shuttingDown) return;
         console.log("PostgreSQL database initialized.");
         rssBuilder = startRSSBuilder(rssConfig, database);
+        newsAnalysis = startNewsAnalysis(database);
 
         if (rssBuilder) {
             rssBuilder.done.catch((error) => {
@@ -180,6 +185,7 @@ async function shutdown(exitCode = 0) {
                 server.close((error) => error ? reject(error) : resolve());
             }),
             rssBuilder?.stop(),
+            newsAnalysis?.stop(),
             databaseReady
         ]);
         await database?.end();

@@ -40,8 +40,11 @@ npm run dev
 - `public/js/app.js`: shared browser API-response helper.
 - `rss-builder/`: JavaScript RSS worker, feed list, geographic hints, and SQL schema.
 - `services/db.js`: shared PostgreSQL pool, Cloud SQL settings, and schema initialization.
+- `services/article-summaries.js`: article JSON, summary prompts, model response validation, and summary storage.
+- `services/gemma.js`: authenticated vLLM requests and summary generation.
 - `scripts/setup-cloud-sql.sh`: one-time Google Cloud resource setup.
 - `scripts/setup-typesense.sh`: persistent Typesense VM and Cloud Run connection setup.
+- `scripts/setup-gemma.sh`: Gemma 4 31B model cache and GPU Cloud Run deployment.
 - `.env.example`: local defaults and optional future service settings.
 
 ## Dependencies
@@ -58,6 +61,7 @@ package manifest and lockfile.
 | `express-rate-limit` | Future request rate limits |
 | `pg` | RSS story storage in PostgreSQL |
 | `rss-parser` | RSS and Atom feed parsing |
+| `html-to-text` | Readable article text from feed HTML and XHTML |
 | `nodemailer` | Future email delivery |
 
 Email and rate-limit features are not wired into the starter.
@@ -138,6 +142,27 @@ first poll. Stories are saved to PostgreSQL before indexing. A search outage doe
 not stop later database writes; indexing retries with a database backfill to repair
 missed imports.
 
+The `content` column stores readable text: full `content:encoded` or Atom content
+first, then a description/summary if the body is empty. HTML tags, tracking images,
+scripts, and link URLs are removed while paragraphs and lists remain readable.
+The original markup remains in `item_xml`, and images remain in `images`.
+Headline-and-publisher snippets (such as the Google News Reuters feed) have no
+article body, so content is empty and DBviewer shows "No article text in feed".
+Publisher pages are not fetched; a feed that provides only a summary stays a summary.
+
+Repeat polls update existing content and its location hints. To repair older rows
+that are no longer in the live feeds, preview extraction from their saved XML:
+
+```bash
+npm run rss:repair-content
+npm run rss:repair-content -- --apply
+```
+
+The default is a read-only dry run. Applying repairs keeps original XML, images,
+titles, links, and IDs, skips malformed XML and concurrent changes, and refreshes
+Typesense when configured. Rows without saved XML are cleaned from existing content.
+Run the repair again if search indexing fails after PostgreSQL updates complete.
+
 Optional environment settings are documented in `.env.example`. `RSS_ENABLED=false`
 disables polling even when credentials are present. `RSS_ENABLED=true` requires
 database credentials and fails startup if they are missing. Without database
@@ -148,6 +173,122 @@ Run the worker checks without live PostgreSQL, Typesense, or news services:
 
 ```bash
 npm test
+```
+
+## Article summaries
+
+Schema initialization creates `article_summaries` alongside `entries`. Each row
+has its own ID, a unique `article_id` referencing `entries.id`, a `summary` JSONB
+array of exactly five nonempty strings, a model identifier, and creation/update
+timestamps. Deleting an article deletes its summary. Saving another summary for
+the same article updates the existing row. The usual app startup or `npm run db:init`
+applies this schema to a configured database.
+
+`services/article-summaries.js` exports these backend helpers:
+
+- `jsonifyArticle({ id, content })` returns a JSON string with `article_id` and
+  `content`. IDs remain strings to preserve PostgreSQL bigint precision. The RSS
+  parser has already extracted `entries.content`; the helper preserves plain text
+  and any HTML/XML markup inside that JSON string, without parsing another XML tree.
+- `buildSummaryPrompt(article)` includes that payload and requests exactly five
+  factual bullet strings in a JSON array.
+- `parseSummaryText(text)` parses model output into a JavaScript array, validates
+  five nonempty strings, and rejects prose, wrong types, and double-encoded JSON.
+- `saveArticleSummary(pool, { articleId, text, model })` validates the model's text
+  and upserts the parsed summary into JSONB using parameterized SQL.
+- `summarizeArticle(pool, articleId, { generateText, model })` reads the article,
+  calls the supplied generator, and saves its `{ text: "[...JSON bullets...]" }`
+  response. Generation or validation failures leave any existing summary intact.
+
+Example using the Gemma 4 31B Instruct deployment:
+
+```javascript
+const { summarizeWithGemma } = require("./services/gemma");
+
+const saved = await summarizeWithGemma(pool, "123");
+console.log(saved.summary); // A JavaScript array, parsed from PostgreSQL JSONB.
+```
+
+The database value is `["First point", "Second point", "Third point", "Fourth point", "Fifth point"]`,
+not a JSON string containing another JSON string. Summarization remains explicit;
+RSS ingestion does not automatically submit articles to the GPU service.
+No model endpoint or credentials are required to run the rest of the app.
+
+## Gemma 4 on Cloud Run
+
+Run the setup from an updated checkout in Cloud Shell with Node.js and gcloud
+already available:
+
+```bash
+bash scripts/setup-gemma.sh
+```
+
+This follows [Google's Gemma 4 31B Cloud Run deployment guide](https://codelabs.developers.google.com/codelabs/cloud-run/cloud-run-gpu-rtx-pro-6000-gemma4-vllm).
+It creates `sfhacksxgdg2026-gemma` in `us-central1` with one RTX PRO 6000 GPU
+(96 GB VRAM), 20 CPUs, and 80 GiB of system RAM. These are separate resources
+from the website. The service uses a maximum of one instance and scales to zero
+when idle; GPU, CPU, and memory are billed while an instance runs. Model storage
+continues to incur charges. GPU quota and capacity must be available in this region.
+Cloud Run's [supported GPU regions and requirements](https://docs.cloud.google.com/run/docs/configuring/services/gpu)
+determine this location and machine configuration.
+
+The script first copies Google's public `google/gemma-4-31B-it` weights into
+`gs://sfsu-hackathon-2026-gemma-models-us-central1/gemma-4-31B-it` using
+`cloudbuild.gemma-model.yaml`. This build uses `--no-source`, a dedicated copy
+identity, and Cloud Logging, so it does not require reading a source archive from
+the build upload bucket. No Hugging Face token or local model download is needed.
+Reruns synchronize the existing cache without deleting objects.
+
+The GPU service runs Google's prebuilt `pytorch-vllm-serve:gemma4` container.
+Run:ai Model Streamer reads the cached weights through Direct VPC egress and
+Private Google Access. The runtime identity has read access to the model bucket;
+the build identity can update its objects. The setup requires permission to manage
+Cloud Run, service accounts and IAM bindings, networking, Cloud Storage, and builds.
+The operator must be able to invoke the private model service for its smoke test.
+
+The model is served as `google/gemma-4-31B-it`, with FP8 weights/cache, a 16,384-token
+context, and four concurrent sequences. Its Cloud Run endpoint requires IAM
+authentication. Only the application's identity is explicitly granted service
+invocation access by this script. The script checks a real five-bullet inference
+before setting `GEMMA_URL` and `GEMMA_MODEL` on the website. Future application
+deployments preserve these environment settings; normal Git pushes do not rebuild
+or redeploy the GPU service.
+
+The JavaScript adapter requests a five-string JSON schema, disables thinking for
+summaries, checks for a completed response, and validates the returned array.
+It obtains a short-lived identity token from Google's metadata server when running
+on Cloud Run. vLLM's `choices[0].message.content` is normalized to `{ text }` before
+the summary is saved. No API key or npm dependency is required.
+
+For a manual inference check from Cloud Shell, obtain a short-lived token without
+printing it:
+
+```bash
+export GEMMA_URL="$(gcloud run services describe sfhacksxgdg2026-gemma \
+  --project=sfsu-hackathon-2026 --region=us-central1 --format='value(status.url)')"
+export GEMMA_ID_TOKEN="$(gcloud auth print-identity-token)"
+node scripts/check-gemma.js
+```
+
+With the database connection/proxy configured as described above, summarize one
+existing article by ID:
+
+```bash
+npm run summarize -- 123
+unset GEMMA_ID_TOKEN
+```
+
+The token expires; refresh it for later local invocations. Cloud Run handles token
+refresh by requesting a token for each model call. `GEMMA_TIMEOUT_MS` defaults to
+900,000 milliseconds to allow for model cold starts. Startup and the first model
+copy can take several minutes. Do not commit identity tokens into environment files.
+
+If deployment fails, inspect its logs and verify the Cloud Run RTX PRO 6000 quota
+for `us-central1`, then rerun the setup:
+
+```bash
+gcloud run services logs read sfhacksxgdg2026-gemma \
+  --project=sfsu-hackathon-2026 --region=us-central1 --limit=80
 ```
 
 ## Container
@@ -297,3 +438,60 @@ gcloud run services describe sfhacksxgdg2026-git --project=sfsu-hackathon-2026 \
 ## License
 
 MIT. See [LICENSE](LICENSE).
+
+### News topic backend
+
+Set `GEMMA_URL` to the existing private vLLM Cloud Run API and set
+`SUMMARIES_ENABLED=true` to enable background analysis. No GPU resource is created
+by the application. The existing runtime identity authenticates model requests;
+local development can use `GEMMA_ID_TOKEN`. Startup applies the database schema.
+
+The worker reads `entries.content`, assigns a topic, and saves five strings in
+`article_summaries.summary` (JSONB), plus `topic`. It revisits changed content.
+Daily `topic_summaries` rows hold five subtopic bullets for each topic and UTC
+publication date. `topic_bullet_articles` maps each numbered bullet to supporting
+articles. These are shared tables with rows for each topic, not dynamically
+created SQL tables. Citation IDs must come from the model's supplied sources.
+Validation cannot establish that the model's interpretation is factually correct.
+
+The worker processes 20 pending articles per pass, waits 60 seconds between
+passes, and retries failures. A PostgreSQL advisory lock prevents concurrent
+workers across web instances. Each daily synthesis uses up to the 100 newest
+summarized articles for that topic/date, ordered deterministically; it refreshes
+when this source set changes. Empty article content is skipped. Model deployment
+and enabling the worker remain separate configuration steps.
+
+Frontend read endpoints (no frontend pages are changed):
+
+- `GET /api/topics?date=2026-10-02`: `{date, topics:[{id, topic, date, bullets:[{bullet, text}]}]}`. Defaults to today's UTC date.
+- `GET /api/topics/:id/bullets/:bullet/articles`: topic/date, bullet number/text, and its supporting `articles` array. Bullet numbers are 1–5.
+- `GET /api/articles/:id`: `{id, topic, title, link, images, summary}`. Summary is a JSON array, not a serialized string; topic/summary may be null until analyzed.
+
+Article payloads contain only those six fields (ID supports navigation); raw
+content, XML, database credentials and model prompts are never returned by these
+endpoints. Render model text as text, not HTML, and validate external link/image
+URLs in the frontend. Topic lists are empty until analysis publishes results.
+
+### Page API contracts
+
+- **Main feed — `GET /api/feed?date=YYYY-MM-DD`** returns
+  `{date, cards:[{id, topic, date, events:[{event:1, text:"..."}, ...]}]}`.
+  Each card has exactly five events. Date defaults to today in UTC; a date with
+  no published summaries returns an empty cards array.
+- **Topic page — `GET /api/topics/:id`** returns
+  `{id, topic, date, summary:[five strings], events:[{event, text}], selected_event:null, articles:[...]}`.
+  The ID is the daily topic summary ID from a feed card. Articles are distinct,
+  cited by that daily summary, and ordered newest first (ID breaks ties), with a
+  maximum of five. Fewer are returned when fewer supporting articles exist.
+  Add `?event=1` (1–5) to show only articles cited by the clicked event;
+  `selected_event` then contains that number. The full topic summary stays available.
+- **Article page — `GET /api/articles/:id`** returns
+  `{id, topic, title, link, images, summary:[five strings]}`. This is the article's
+  own summary, not the aggregate topic summary. Articles not yet analyzed have
+  null topic/summary. Images retain the RSS builder's stored JSON representation.
+
+All nested article objects use the same six fields as the article page. IDs are
+strings to preserve PostgreSQL bigint precision. Invalid IDs, dates, or event
+numbers return 400; missing topic/article IDs return 404; an unconfigured database
+returns 503. Existing `/api/topics` and bullet-specific citation routes remain
+available for compatibility. Reading these endpoints does not invoke the model.
