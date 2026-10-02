@@ -38,6 +38,8 @@ npm run dev
 - `public/css/`: shared styles and index-page layout.
 - `public/js/app.js`: shared browser API-response helper.
 - `rss-builder/`: JavaScript RSS worker, feed list, geographic hints, and SQL schema.
+- `services/db.js`: shared PostgreSQL pool, Cloud SQL settings, and schema initialization.
+- `scripts/setup-cloud-sql.sh`: one-time Google Cloud resource setup.
 - `.env.example`: local defaults and optional future service settings.
 
 ## Dependencies
@@ -62,11 +64,19 @@ Environment files, dependencies, and private keys are excluded from Git.
 ## RSS worker
 
 `npm start` runs Express and the RSS worker in the same Node.js process. The worker
-starts automatically when `DATABASE_URL` and `TYPESENSE_API_KEY` are set. Configure
+starts automatically when PostgreSQL and `TYPESENSE_API_KEY` are configured. Configure
 `TYPESENSE_URL` with your Typesense server address; it defaults to
 `http://localhost:8108` for local development. PostgreSQL and Typesense must be
 provided separately. The web server stays available while the worker retries
-unavailable services.
+unavailable services. The PostgreSQL schema initializes at server startup even
+when RSS is disabled or Typesense is not configured.
+
+For local PostgreSQL, set `DATABASE_URL`. You can also initialize its schema without
+starting the server:
+
+```bash
+npm run db:init
+```
 
 The worker reads `rss-builder/feeds.json`, polls every 600 seconds, and fetches up
 to 10 feeds concurrently. It preserves the Python worker's current-year filtering,
@@ -100,14 +110,62 @@ settings with `--env-file .env` and use database and Typesense addresses reachab
 from inside the container.
 
 `cloudbuild.yaml` deploys this image to `sfhacksxgdg2026-git` in `us-west2`.
-Configure the RSS credentials and Typesense URL on that Cloud Run service, using
-Secret Manager for secrets. Deployment preserves existing environment settings.
+The deployment attaches Cloud SQL and injects its password from Secret Manager.
+Configure the Typesense URL and API key separately on that Cloud Run service,
+using Secret Manager for the API key. Deployment preserves other environment settings.
 
 The deployment keeps at least one instance running with CPU available between
 requests so RSS polling continues while the website is idle. This uses
 [instance-based billing](https://docs.cloud.google.com/run/docs/configuring/billing-settings)
 and incurs charges while idle. Each application instance runs a worker; database
 conflicts on `(source, link)` and stable Typesense IDs deduplicate linked stories.
+
+## Cloud SQL setup
+
+Run the setup script once from an updated checkout in Google Cloud Shell before
+deploying the new `cloudbuild.yaml`:
+
+```bash
+bash scripts/setup-cloud-sql.sh
+```
+
+The script creates billed resources in project `sfsu-hackathon-2026`:
+
+- PostgreSQL 16 instance `sfhacksxgdg2026-db` in `us-west2`, using the Enterprise
+  edition, `db-f1-micro` shared CPU, a 10 GB SSD that can grow, and daily backups.
+  This small, single-zone instance suits initial development.
+- Database and user `timeline`.
+- Secret `sfhacksxgdg2026-db-password`, with a generated password that is never printed.
+- Artifact Registry repository `cloud-run-source-deploy` in `us-west1`, if missing.
+
+It grants the existing Cloud Run runtime service account Cloud SQL Client access
+and access to this password secret. Reruns reuse the resources and password. Your
+signed-in Cloud Shell account needs permission to enable APIs, create these
+resources, and grant their IAM roles. The Cloud Build service account still needs
+the build/deployment roles listed at the top of `cloudbuild.yaml`.
+
+After setup, commit and push the project to the repository connected to your
+Cloud Build trigger. A checkout in Cloud Shell can also submit a build immediately:
+
+```bash
+gcloud builds submit --project=sfsu-hackathon-2026 --config=cloudbuild.yaml .
+```
+
+Cloud Build attaches `sfsu-hackathon-2026:us-west2:sfhacksxgdg2026-db` to the
+`sfhacksxgdg2026-git` service. The app connects through
+`/cloudsql/sfsu-hackathon-2026:us-west2:sfhacksxgdg2026-db` using the existing `pg`
+dependency. Data lives in Cloud SQL and survives app restarts and deployments;
+an application file volume is not required. This follows Google's
+[Cloud Run connection setup](https://docs.cloud.google.com/sql/docs/postgres/connect-run).
+
+Look for `PostgreSQL database initialized.` in the Cloud Run logs after deployment.
+RSS starts after initialization when its Typesense settings are configured. To
+print the website URL:
+
+```bash
+gcloud run services describe sfhacksxgdg2026-git --project=sfsu-hackathon-2026 \
+  --region=us-west2 --format='value(status.url)'
+```
 
 ## License
 

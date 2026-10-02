@@ -2,7 +2,7 @@ const crypto = require("node:crypto");
 const fs = require("node:fs/promises");
 const path = require("node:path");
 const { setTimeout: sleep } = require("node:timers/promises");
-const { Pool } = require("pg");
+const { readDatabaseConfig, createDatabasePool, initializeSchema: ensureSchema } = require("../services/db");
 const geoHints = require("./geo-hints.json");
 
 const SKIP_PATTERNS = {
@@ -42,16 +42,17 @@ function readConfig(env = process.env) {
         throw new Error("RSS_ENABLED must be true or false.");
     }
 
+    const databaseConfig = readDatabaseConfig(env);
     const enabled = env.RSS_ENABLED === undefined
-        ? Boolean(env.DATABASE_URL && env.TYPESENSE_API_KEY)
+        ? Boolean(databaseConfig && env.TYPESENSE_API_KEY)
         : env.RSS_ENABLED === "true";
 
     if (!enabled) return null;
-    if (!env.DATABASE_URL) throw new Error("DATABASE_URL is required for RSS.");
+    if (!databaseConfig) throw new Error("DATABASE_URL or INSTANCE_CONNECTION_NAME is required for RSS.");
     if (!env.TYPESENSE_API_KEY) throw new Error("TYPESENSE_API_KEY is required for RSS.");
 
     return {
-        databaseURL: env.DATABASE_URL,
+        databaseConfig,
         typesenseURL: (env.TYPESENSE_URL || "http://localhost:8108").replace(/\/+$/, ""),
         typesenseAPIKey: env.TYPESENSE_API_KEY,
         typesenseCollection: env.TYPESENSE_COLLECTION || "timeline_entries",
@@ -199,11 +200,6 @@ async function fetchFeeds(feeds, maxWorkers, options = {}) {
 
     await Promise.all(Array.from({ length: Math.min(maxWorkers, feeds.length) }, worker));
     return results;
-}
-
-async function ensureSchema(database) {
-    const schema = await fs.readFile(path.join(__dirname, "schema.sql"), "utf8");
-    await database.query(schema);
 }
 
 async function typesenseRequest(config, route, options = {}, signal) {
@@ -381,13 +377,7 @@ async function fetchOnce(database, config, signal) {
 // Start asynchronously so database or search outages do not block the web server.
 function startRSSBuilder(config, database) {
     if (!config) return null;
-    const pool = database || new Pool({
-        connectionString: config.databaseURL,
-        connectionTimeoutMillis: 5000,
-        statement_timeout: 5000,
-        max: 2
-    });
-    pool.on("error", (error) => console.error("RSS database error:", error.message));
+    const pool = database || createDatabasePool(config.databaseConfig);
     const controller = new AbortController();
     const { signal } = controller;
 
@@ -417,7 +407,7 @@ function startRSSBuilder(config, database) {
         } catch (error) {
             if (!signal.aborted) throw error;
         } finally {
-            await pool.end();
+            if (!database) await pool.end();
         }
     }
 

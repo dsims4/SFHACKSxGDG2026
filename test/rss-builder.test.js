@@ -11,7 +11,7 @@ const {
 const geoHints = require("../rss-builder/geo-hints.json");
 
 const config = {
-    databaseURL: "postgresql://unused",
+    databaseConfig: { connectionString: "postgresql://unused" },
     typesenseURL: "https://search.example",
     typesenseAPIKey: "test-key",
     typesenseCollection: "timeline_entries",
@@ -280,7 +280,7 @@ test("a full poll reads the bundled feeds, commits candidates, and imports them"
     assert.equal(database.released, 1);
 });
 
-test("shutdown cancels an in-flight feed request and closes the database pool", async (t) => {
+test("shutdown cancels an in-flight feed request and leaves a shared database pool open", async (t) => {
     const database = fakeDatabase();
     let feedStarted;
     const started = new Promise((resolve) => { feedStarted = resolve; });
@@ -294,5 +294,5 @@ test("shutdown cancels an in-flight feed request and closes the database pool", 
     const builder = startRSSBuilder(config, database);
     await started;
     await builder.stop();
-    assert.equal(database.ended, 1);
+    assert.equal(database.ended, 0);
 });

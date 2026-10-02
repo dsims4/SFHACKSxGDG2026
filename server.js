@@ -17,6 +17,8 @@ const path = require("path");
 
 const publicRouter = require("./routes/public");
 const { readConfig, startRSSBuilder } = require("./rss-builder/rss_builder");
+const { readDatabaseConfig, createDatabasePool, waitForDatabase } = require("./services/db");
+const databaseConfig = readDatabaseConfig();
 const rssConfig = readConfig();
 
 // This object is the complete Express application configured below.
@@ -125,19 +127,35 @@ app.use((error, req, res, next) => {
 // Start the server after middleware and routes are ready.
 let rssBuilder = null;
 let shuttingDown = false;
+const database = databaseConfig ? createDatabasePool(databaseConfig) : null;
+const databaseController = new AbortController();
+let databaseReady = Promise.resolve();
 
 const server = app.listen(port, () => {
     console.log(`Server is running at http://localhost:${port}`);
-    rssBuilder = startRSSBuilder(rssConfig);
-
-    if (rssBuilder) {
-        rssBuilder.done.catch((error) => {
-            console.error("RSS builder stopped unexpectedly:", error);
-            shutdown(1);
-        });
-    } else {
-        console.log("RSS builder disabled. Configure DATABASE_URL and TYPESENSE_API_KEY to enable it.");
+    if (!database) {
+        console.log("Database disabled. Configure DATABASE_URL or a Cloud SQL connection to initialize it.");
+        return;
     }
+
+    databaseReady = waitForDatabase(database, databaseController.signal).then(() => {
+        if (shuttingDown) return;
+        console.log("PostgreSQL database initialized.");
+        rssBuilder = startRSSBuilder(rssConfig, database);
+
+        if (rssBuilder) {
+            rssBuilder.done.catch((error) => {
+                console.error("RSS builder stopped unexpectedly:", error);
+                shutdown(1);
+            });
+        } else {
+            console.log("RSS builder disabled. Configure TYPESENSE_API_KEY and TYPESENSE_URL to enable it.");
+        }
+    });
+    databaseReady.catch((error) => {
+        console.error("Database initialization stopped unexpectedly:", error);
+        shutdown(1);
+    });
 });
 
 // Cloud Run sends SIGTERM before stopping an instance. Cancel polling and close
@@ -145,17 +163,22 @@ const server = app.listen(port, () => {
 async function shutdown(exitCode = 0) {
     if (shuttingDown) return;
     shuttingDown = true;
+    databaseController.abort();
 
     const timeout = setTimeout(() => process.exit(1), 9000);
     timeout.unref();
 
     try {
-        await Promise.all([
+        const results = await Promise.allSettled([
             new Promise((resolve, reject) => {
                 server.close((error) => error ? reject(error) : resolve());
             }),
-            rssBuilder?.stop()
+            rssBuilder?.stop(),
+            databaseReady
         ]);
+        await database?.end();
+        const failure = results.find((result) => result.status === "rejected");
+        if (failure) throw failure.reason;
         process.exitCode = exitCode;
     } catch (error) {
         console.error("Shutdown failed:", error);
