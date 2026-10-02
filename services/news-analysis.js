@@ -75,7 +75,7 @@ async function analyzePending(client, generateText, model, signal) {
         SELECT membership.topic, (NOW() AT TIME ZONE 'UTC')::date::text AS date
         FROM entries e JOIN article_summaries s ON s.article_id = e.id
         CROSS JOIN LATERAL unnest(e.topics) AS membership(topic)
-        WHERE e.publication_date >= ((date_trunc('day', NOW() AT TIME ZONE 'UTC') - INTERVAL '1 day') AT TIME ZONE 'UTC') AND e.publication_date <= NOW()
+        WHERE e.publication_date >= (date_trunc('day', NOW() AT TIME ZONE 'UTC') AT TIME ZONE 'UTC') AND e.publication_date <= NOW()
             AND s.content_hash = md5(e.content)
         GROUP BY membership.topic
         ORDER BY date DESC, membership.topic
@@ -84,26 +84,26 @@ async function analyzePending(client, generateText, model, signal) {
         signal?.throwIfAborted();
         const sources = await client.query(`
             SELECT e.id::text, s.summary FROM entries e JOIN article_summaries s ON s.article_id = e.id
-            WHERE $1 = ANY(e.topics) AND (e.publication_date AT TIME ZONE 'UTC')::date BETWEEN $2::date - 1 AND $2::date
-                AND e.publication_date >= ((date_trunc('day', NOW() AT TIME ZONE 'UTC') - INTERVAL '1 day') AT TIME ZONE 'UTC') AND e.publication_date <= NOW()
+            WHERE $1 = ANY(e.topics) AND (e.publication_date AT TIME ZONE 'UTC')::date = $2::date
+                AND e.publication_date >= (date_trunc('day', NOW() AT TIME ZONE 'UTC') AT TIME ZONE 'UTC') AND e.publication_date <= NOW()
                 AND s.content_hash = md5(e.content)
             ORDER BY e.publication_date DESC, e.id DESC LIMIT 100
         `, [group.topic, group.date]);
         if (!sources.rows.length) continue;
         const payload = JSON.stringify(sources.rows);
-        const fingerprint = hash("concise-v3:" + payload);
+        const fingerprint = hash("today-v4:" + payload);
         const existing = await client.query("SELECT source_hash FROM topic_summaries WHERE topic = $1 AND date = $2", [group.topic, group.date]);
         if (existing.rows[0]?.source_hash === fingerprint) continue;
         try {
-            const response = await generateText(`${rules}\nCreate the ${group.date} daily summary for ${group.topic} from the supplied articles published today and yesterday into up to five distinct subtopic bullets. Include only facts relevant to this topic, even when articles cover other topics. Each bullet must cite only IDs of articles directly supporting its claims. Return {"bullets":[{"text":"fact","article_ids":["id"]}]}. Articles:\n${payload}`, { model, signal, schema: topicSchema });
+            const response = await generateText(`${rules}\nCreate the ${group.date} daily summary for ${group.topic} from the supplied articles published today into up to five distinct subtopic bullets. Include only facts relevant to this topic, even when articles cover other topics. Each bullet must cite only IDs of articles directly supporting its claims. Return {"bullets":[{"text":"fact","article_ids":["id"]}]}. Articles:\n${payload}`, { model, signal, schema: topicSchema });
             const bullets = parseTopic(response.text, sources.rows);
             await client.query("BEGIN");
             try {
                 const saved = await client.query(`
-                    INSERT INTO topic_summaries(topic, date, summary, source_hash, model)
-                    VALUES($1, $2, $3::jsonb, $4, $5)
+                    INSERT INTO topic_summaries(topic, date, summary, source_hash, model, source_window_days)
+                    VALUES($1, $2, $3::jsonb, $4, $5, 1)
                     ON CONFLICT(topic, date) DO UPDATE SET summary = EXCLUDED.summary,
-                        source_hash = EXCLUDED.source_hash, model = EXCLUDED.model, updated_at = NOW()
+                        source_hash = EXCLUDED.source_hash, model = EXCLUDED.model, source_window_days = 1, updated_at = NOW()
                     RETURNING id
                 `, [group.topic, group.date, JSON.stringify(bullets.map((bullet) => bullet.text)), fingerprint, model]);
                 const id = saved.rows[0].id;

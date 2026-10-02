@@ -90,3 +90,48 @@ html[data-theme="dark"] .dbviewer :is(label, .sub, .meta, .muted) {
 html[data-theme="dark"] .dbviewer a {
     color: var(--theme-link);
 }
+
+/* Balance the logo and theme control around centered navigation. */
+.site-header {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
+    gap: 1rem;
+}
+
+.site-header .wordmark { justify-self: start; }
+.site-header nav { justify-self: center; }
+
+.site-header #theme-toggle {
+    justify-self: end;
+    padding: 0.4rem 0.6rem;
+    font: inherit;
+    font-size: 0.7rem;
+    font-weight: 400;
+    line-height: 1.4;
+    white-space: nowrap;
+    border: 1px solid var(--line);
+    background: var(--color-surface);
+    color: var(--color-ink);
+}
+
+.site-header #theme-toggle:hover { text-decoration: underline; }
+
+@media (max-width: 760px) {
+    .site-header {
+        grid-template-columns: minmax(0, 1fr) auto;
+        gap: 0;
+        padding-top: 1rem;
+    }
+    .site-header #theme-toggle { grid-column: 2; grid-row: 1; }
+    .site-header nav { grid-column: 1 / -1; grid-row: 2; }
+    .site-header nav a { padding: 1rem 0; }
+}
+
+/* Keep contrast behind the inverted globe without recoloring its gray columns. */
+html[data-theme="dark"] .globe-visual {
+    background: #fff;
+}
+
+html[data-theme="dark"] :is(.globe-view-label, .tiny-cross, .view-dimension, .globe-visual-footer, .globe-instructions span, .globe-loading, .globe-fallback) {
+    color: #000;
+}

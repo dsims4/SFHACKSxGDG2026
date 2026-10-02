@@ -10,7 +10,7 @@
     </head>
 
     <body class="{% block body_class %}{% endblock %}">
-        <div class="theme-toolbar"><button id="theme-toggle" type="button" aria-label="Switch to dark theme">Dark theme</button></div>
+        {% block theme_control %}<div class="theme-toolbar">{% include "partials/theme-toggle.njk" %}</div>{% endblock %}
         <main>
             {% block content %}{% endblock %}
         </main>

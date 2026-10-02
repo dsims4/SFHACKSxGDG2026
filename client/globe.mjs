@@ -158,25 +158,25 @@ async function loadStories() {
     refreshLocations();
 }
 
-function makeMapTexture() {
+function makeMapTexture(dark = document.documentElement.dataset.theme === 'dark') {
     const canvas = document.createElement('canvas');
     canvas.width = 2048;
     canvas.height = 1024;
     const context = canvas.getContext('2d');
     const projection = geoEquirectangular().translate([1024, 512]).scale(2048 / (2 * Math.PI));
     const path = geoPath(projection, context);
-    context.fillStyle = '#ffffff';
+    context.fillStyle = dark ? '#212121' : '#ffffff';
     context.fillRect(0, 0, canvas.width, canvas.height);
     context.beginPath();
     path(feature(world, world.objects.land));
-    context.fillStyle = '#ffffff';
+    context.fillStyle = dark ? '#212121' : '#ffffff';
     context.fill();
-    context.strokeStyle = '#000000';
+    context.strokeStyle = dark ? '#ffffff' : '#000000';
     context.lineWidth = 2.4;
     context.stroke();
     context.beginPath();
     path(mesh(world, world.objects.countries, (a, b) => a !== b));
-    context.strokeStyle = '#000000';
+    context.strokeStyle = dark ? '#ffffff' : '#000000';
     context.lineWidth = 0.9;
     context.stroke();
     const texture = new THREE.CanvasTexture(canvas);
@@ -229,6 +229,19 @@ function makeGlobe() {
     const dotMaterial = new THREE.MeshBasicMaterial({ color: '#000000' });
     const columnGeometry = new THREE.CylinderGeometry(0.0045, 0.009, 1, 8);
     const columnMaterial = new THREE.MeshBasicMaterial({ color: '#777777' });
+    function updateTheme() {
+        const dark = document.documentElement.dataset.theme === 'dark';
+        const previous = earth.material.map;
+        earth.material.map = makeMapTexture(dark);
+        earth.material.needsUpdate = true;
+        previous.dispose();
+        outline.material.color.set(dark ? '#ffffff' : '#000000');
+        dotMaterial.color.set(dark ? '#ffffff' : '#000000');
+        selectionRing.material.color.set(dark ? '#ffffff' : '#000000');
+    }
+    const themeObserver = new MutationObserver(updateTheme);
+    themeObserver.observe(document.documentElement, { attributes: true, attributeFilter: ['data-theme'] });
+    updateTheme();
     const pointer = new THREE.Vector2();
     const raycaster = new THREE.Raycaster();
     const direction = new THREE.Vector3(0, 1, 0);
@@ -405,6 +418,7 @@ function makeGlobe() {
         intersection.disconnect();
         document.removeEventListener('visibilitychange', resume);
         reducedMotion.removeEventListener('change', onMotionPreference);
+        themeObserver.disconnect();
         controls.dispose();
         const geometries = new Set();
         const materials = new Set();

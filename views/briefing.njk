@@ -2,11 +2,13 @@
 {% block title %}Daily Briefing — Newstralizer{% endblock %}
 {% block body_class %}globe-page{% endblock %}
 {% block scripts %}<link rel="stylesheet" href="/css/globe.css">{% endblock %}
+{% block theme_control %}{% endblock %}
 {% block content %}
 <div class="news-home">
     <header class="site-header">
         <a class="wordmark" href="/" aria-label="Newstralizer home"><span class="brand-symbol" aria-hidden="true">✳</span> newstralizer<span class="brand-period">.</span></a>
         <nav aria-label="Main navigation"><a href="/">The world</a><a href="/briefing" aria-current="page">Daily briefing <span aria-hidden="true">↗</span></a></nav>
+        {% include "partials/theme-toggle.njk" %}
     </header>
 
     <section id="daily-topics" class="daily-topics" aria-labelledby="daily-heading">

@@ -91,3 +91,5 @@ ALTER TABLE article_summaries DROP CONSTRAINT IF EXISTS article_summaries_five_b
 ALTER TABLE article_summaries ADD CONSTRAINT article_summaries_five_bullets CHECK (valid_news_bullets(summary));
 ALTER TABLE topic_summaries DROP CONSTRAINT IF EXISTS topic_summaries_summary_check;
 ALTER TABLE topic_summaries ADD CONSTRAINT topic_summaries_summary_check CHECK (valid_news_bullets(summary));
+
+ALTER TABLE topic_summaries ADD COLUMN IF NOT EXISTS source_window_days INTEGER NOT NULL DEFAULT 2;

@@ -600,3 +600,10 @@ bullets. Startup migrates the database constraints. Active articles are progress
 regenerated with classification version 3, and topic summaries refresh using a new
 prompt fingerprint so old filler can be replaced. Existing stored summaries are
 not erased while regeneration is pending.
+
+
+Topic pages and Daily Briefing now show only today's UTC summaries and articles.
+Topic synthesis uses only today's sources. Existing two-day summaries are hidden
+until the worker regenerates them (`source_window_days = 1`), avoiding stale
+mixed-day results after deployment. RSS collection and the globe's selectable
+24/48-hour article window are unchanged.
