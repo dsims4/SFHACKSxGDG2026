@@ -41,6 +41,7 @@ npm run dev
 - `rss-builder/`: JavaScript RSS worker, feed list, geographic hints, and SQL schema.
 - `services/db.js`: shared PostgreSQL pool, Cloud SQL settings, and schema initialization.
 - `scripts/setup-cloud-sql.sh`: one-time Google Cloud resource setup.
+- `scripts/setup-typesense.sh`: persistent Typesense VM and Cloud Run connection setup.
 - `.env.example`: local defaults and optional future service settings.
 
 ## Dependencies
@@ -175,14 +176,76 @@ environment variables. The app's connection URL contains no password.
 
 `cloudbuild.yaml` deploys this image to `sfhacksxgdg2026-git` in `us-west2`.
 The deployment attaches Cloud SQL and injects its password from Secret Manager.
-The deployment enables RSS polling. Configure the optional Typesense URL and API key separately on that Cloud Run service,
-using Secret Manager for the API key. Deployment preserves other environment settings.
+The deployment enables RSS polling. Run `scripts/setup-typesense.sh` to configure
+the Typesense connection and Secret Manager API key. Deployment preserves those
+environment variables, secrets, and Direct VPC egress settings on later pushes.
 
 The deployment keeps at least one instance running with CPU available between
 requests so RSS polling continues while the website is idle. This uses
 [instance-based billing](https://docs.cloud.google.com/run/docs/configuring/billing-settings)
 and incurs charges while idle. Each application instance runs a worker; database
 conflicts on `(source, link)` and stable Typesense IDs deduplicate linked stories.
+
+## Cloud Typesense setup
+
+Run this once from an updated checkout in Google Cloud Shell:
+
+```bash
+bash scripts/setup-typesense.sh
+```
+
+The script creates a single `e2-standard-2` VM (2 vCPUs, 8 GiB RAM) in `us-west2-c`,
+a 20 GB persistent search disk, a 10 GB boot disk, and a dedicated VPC subnet.
+These resources and the VM's external IP incur charges while provisioned.
+The external IP allows container image downloads; inbound search access is
+restricted to the private subnet. The script requires permission to create these
+resources, grant secret access, update Cloud Run, and connect to the VM through
+IAP SSH. Project administrators already have broad resource permissions; IAP
+access may require `roles/iap.tunnelResourceAccessor` for the operator.
+
+The VM uses Container-Optimized OS with Docker already available. Its startup
+script runs Typesense 27.1, matching the local Compose version, under systemd.
+The API key is generated in Secret Manager as `sfhacksxgdg2026-typesense-key`.
+The VM reads it with a dedicated service account and stores its runtime environment
+file in memory with owner-only permissions. No key is stored in Git, YAML, or VM
+metadata. Cloud Run receives the same key through Secret Manager.
+
+After verifying `/health`, the setup connects the existing Cloud Run app using
+[Direct VPC egress](https://docs.cloud.google.com/run/docs/configuring/vpc-direct-vpc)
+and `TYPESENSE_URL=http://10.89.0.10:8108`. Only traffic to private addresses uses
+the VPC, so public RSS feeds remain reachable. The worker creates
+`timeline_entries` and backfills current-year PostgreSQL rows on startup.
+This configures indexing; it does not add a browser search interface.
+
+The disk survives VM restarts and is retained if the VM is deleted. Rerunning the
+setup reuses existing resources and the existing API key. This is a single-node
+search service without automatic disk snapshots or high availability; PostgreSQL
+remains the source of truth for rebuilding the index.
+
+To check health or inspect startup failures:
+
+```bash
+gcloud compute ssh sfhacksxgdg2026-typesense \
+  --project=sfsu-hackathon-2026 --zone=us-west2-c --tunnel-through-iap \
+  --command='curl -fsS http://127.0.0.1:8108/health'
+gcloud compute instances get-serial-port-output sfhacksxgdg2026-typesense \
+  --project=sfsu-hackathon-2026 --zone=us-west2-c
+gcloud compute ssh sfhacksxgdg2026-typesense \
+  --project=sfsu-hackathon-2026 --zone=us-west2-c --tunnel-through-iap \
+  --command='sudo journalctl -u sfhacks-typesense -n 80 --no-pager'
+```
+
+After startup-script changes, update VM metadata and apply the script without
+formatting the existing search disk:
+
+```bash
+gcloud compute instances add-metadata sfhacksxgdg2026-typesense \
+  --project=sfsu-hackathon-2026 --zone=us-west2-c \
+  --metadata-from-file=startup-script=scripts/typesense-startup.sh
+gcloud compute ssh sfhacksxgdg2026-typesense \
+  --project=sfsu-hackathon-2026 --zone=us-west2-c --tunnel-through-iap \
+  --command='sudo google_metadata_script_runner startup'
+```
 
 ## Cloud SQL setup
 
