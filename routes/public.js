@@ -13,7 +13,7 @@ function createPublicRouter(database) {
     const router = express.Router();
     router.get("/", (req, res) => res.render("index.njk", { currentPage: "index" }));
     router.get("/briefing", async (req, res) => {
-        const selectedTopics = req.query.topic === undefined ? [] :
+        const selectedTopics = req.query.topic === undefined ? (req.query.all === "true" ? [] : ["politics", "health"]) :
             (Array.isArray(req.query.topic) ? req.query.topic : [req.query.topic]);
         if (selectedTopics.length > TOPICS.length || selectedTopics.some((topic) => !TOPICS.includes(topic))) {
             return res.status(400).send("Invalid topic filter.");
