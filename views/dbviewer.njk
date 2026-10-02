@@ -90,8 +90,12 @@
                             <td>{{ row.source }}</td>
                             <td>{{ row.title }}</td>
                             <td>
+                                {% if row.content %}
                                 <div class="cell-content" id="c{{ row.id }}">{{ row.content }}</div>
                                 <button class="toggle-more" type="button" data-for="c{{ row.id }}">more</button>
+                                {% else %}
+                                <span class="muted">No article text in feed</span>
+                                {% endif %}
                             </td>
                             <td>
                                 {{ row.location }}

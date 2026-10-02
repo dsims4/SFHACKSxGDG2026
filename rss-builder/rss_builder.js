@@ -4,6 +4,7 @@ const path = require("node:path");
 const { setTimeout: sleep } = require("node:timers/promises");
 const { readDatabaseConfig, createDatabasePool, initializeSchema: ensureSchema } = require("../services/db");
 const geoHints = require("./geo-hints.json");
+const { getContent } = require("./content");
 
 const SKIP_PATTERNS = {
     "New York Times": ["here is the latest", "here's the latest", "this is what happened on "],
@@ -78,10 +79,6 @@ function inCurrentYearWindow(date, now = new Date()) {
     if (!date) return false;
     const yearStart = Date.UTC(now.getUTCFullYear(), 0, 1);
     return date.getTime() >= yearStart && date <= now;
-}
-
-function getContent(entry) {
-    return entry.summary || entry.content || entry.description || entry["content:encoded"] || "";
 }
 
 // Outermost <item> or <entry> elements, skipping CDATA and comments so markup
@@ -326,6 +323,46 @@ async function loadFeeds(feedsFile) {
     return feeds;
 }
 
+function createFeedParser() {
+    const Parser = require("rss-parser");
+    class FeedParser extends Parser {
+        parseItemAtom(entry) {
+            return { ...super.parseItemAtom(entry), isAtom: true };
+        }
+
+        async parseString(xml) {
+            const parsed = await super.parseString(xml);
+            const segments = itemXmlList(xml, parsed.items || []);
+            for (const [index, entry] of (parsed.items || []).entries()) {
+                entry.item_xml = segments[index] || null;
+                if (!entry.isAtom) continue;
+                for (const key of ["content", "summary"]) {
+                    if (!["xhtml", "application/xhtml+xml"].includes(entry[`raw_${key}`]?.[0]?.$?.type)) continue;
+                    // rss-parser's XML-object serialization reorders mixed text
+                    // and inline elements. Convert the original XHTML instead.
+                    entry[key] = extractElements(entry.item_xml || "", key)[0] || entry[key];
+                }
+            }
+            return parsed;
+        }
+    }
+    return new FeedParser({
+        customFields: {
+            item: [
+                "published",
+                "updated",
+                ["source", "feedSource"],
+                ["content", "raw_content", { keepArray: true }],
+                ["summary", "raw_summary", { keepArray: true }],
+                ["media:description", "media:description", { keepArray: true }],
+                ["media:content", "media:content", { keepArray: true }],
+                ["media:thumbnail", "media:thumbnail", { keepArray: true }],
+                ["media:group", "media:group", { keepArray: true }]
+            ]
+        }
+    });
+}
+
 async function fetchSingleFeed(feed, { signal, now = new Date() } = {}) {
     const name = feed.name || "Unknown";
     if (!feed.url) return { name, entries: [], error: "No URL provided" };
@@ -338,26 +375,14 @@ async function fetchSingleFeed(feed, { signal, now = new Date() } = {}) {
         });
         if (!response.ok) throw new Error(`HTTP ${response.status}`);
 
-        const Parser = require("rss-parser");
-        const parser = new Parser({
-            customFields: {
-                item: [
-                    "published",
-                    "updated",
-                    ["media:content", "media:content", { keepArray: true }],
-                    ["media:thumbnail", "media:thumbnail", { keepArray: true }],
-                    ["media:group", "media:group", { keepArray: true }]
-                ]
-            }
-        });
+        const parser = createFeedParser();
         const rawXml = await response.text();
         const parsed = await parser.parseString(rawXml);
-        const xmlSegments = itemXmlList(rawXml, parsed.items || []);
         const entries = [];
 
-        for (const [index, entry] of (parsed.items || []).entries()) {
+        for (const entry of parsed.items || []) {
             let title = (entry.title || "").trim();
-            const content = getContent(entry).trim();
+            const content = getContent(entry, { source: name });
             if (shouldSkip(name, title, content)) continue;
 
             if (name === "Reuters" && title.endsWith(" - Reuters")) {
@@ -377,7 +402,7 @@ async function fetchSingleFeed(feed, { signal, now = new Date() } = {}) {
                 link,
                 ...extractLocation(title, content),
                 images: extractImages(entry),
-                item_xml: xmlSegments[index] || null
+                item_xml: entry.item_xml
             });
         }
 
@@ -586,6 +611,15 @@ async function insertStories(database, stories) {
                     images, item_xml
                 ) VALUES ${rows.join(", ")}
                 ON CONFLICT (source, link) DO UPDATE SET
+                    content = EXCLUDED.content,
+                    location_name = EXCLUDED.location_name,
+                    location_level = EXCLUDED.location_level,
+                    location_country = EXCLUDED.location_country,
+                    location_lat = EXCLUDED.location_lat,
+                    location_lng = EXCLUDED.location_lng,
+                    country_lat = EXCLUDED.country_lat,
+                    country_lng = EXCLUDED.country_lng,
+                    has_location = EXCLUDED.has_location,
                     images = EXCLUDED.images,
                     item_xml = COALESCE(EXCLUDED.item_xml, entries.item_xml)
             `, values);
@@ -707,6 +741,7 @@ module.exports = {
     storyID,
     buildDoc,
     loadFeeds,
+    createFeedParser,
     fetchSingleFeed,
     fetchFeeds,
     ensureSchema,

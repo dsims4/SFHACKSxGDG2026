@@ -59,6 +59,7 @@ package manifest and lockfile.
 | `express-rate-limit` | Future request rate limits |
 | `pg` | RSS story storage in PostgreSQL |
 | `rss-parser` | RSS and Atom feed parsing |
+| `html-to-text` | Readable article text from feed HTML and XHTML |
 | `nodemailer` | Future email delivery |
 
 Email and rate-limit features are not wired into the starter.
@@ -138,6 +139,27 @@ When Typesense is configured, current-year database rows are indexed after the
 first poll. Stories are saved to PostgreSQL before indexing. A search outage does
 not stop later database writes; indexing retries with a database backfill to repair
 missed imports.
+
+The `content` column stores readable text: full `content:encoded` or Atom content
+first, then a description/summary if the body is empty. HTML tags, tracking images,
+scripts, and link URLs are removed while paragraphs and lists remain readable.
+The original markup remains in `item_xml`, and images remain in `images`.
+Headline-and-publisher snippets (such as the Google News Reuters feed) have no
+article body, so content is empty and DBviewer shows "No article text in feed".
+Publisher pages are not fetched; a feed that provides only a summary stays a summary.
+
+Repeat polls update existing content and its location hints. To repair older rows
+that are no longer in the live feeds, preview extraction from their saved XML:
+
+```bash
+npm run rss:repair-content
+npm run rss:repair-content -- --apply
+```
+
+The default is a read-only dry run. Applying repairs keeps original XML, images,
+titles, links, and IDs, skips malformed XML and concurrent changes, and refreshes
+Typesense when configured. Rows without saved XML are cleaned from existing content.
+Run the repair again if search indexing fails after PostgreSQL updates complete.
 
 Optional environment settings are documented in `.env.example`. `RSS_ENABLED=false`
 disables polling even when credentials are present. `RSS_ENABLED=true` requires
