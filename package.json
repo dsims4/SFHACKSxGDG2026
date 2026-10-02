@@ -5,6 +5,8 @@
   "scripts": {
     "start": "node server.js",
     "dev": "node --watch server.js",
+    "db:init": "node scripts/db-init.js",
+    "db:env": "node scripts/setup-db-env.js",
     "test": "node --test test/*.test.js"
   },
   "repository": {

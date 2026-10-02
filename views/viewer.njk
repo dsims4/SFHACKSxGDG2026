@@ -1,0 +1,71 @@
+{% extends "layouts/base.njk" %}
+
+{% block title %}Story viewer{% endblock %}
+
+{% block body_class %}viewer-page{% endblock %}
+
+{% block content %}
+<div class="viewer">
+    <h1>Story database</h1>
+    <p><a href="/">Home</a></p>
+
+    {% if unavailable %}
+        <p class="viewer-message">{{ unavailable }}</p>
+    {% else %}
+        <form method="get" action="/viewer">
+            <input type="hidden" name="sort" value="{{ sort }}">
+            <input type="hidden" name="dir" value="{{ dir }}">
+            <label>
+                Search title, source, location, link, or text
+                <input name="q" value="{{ q }}" maxlength="200">
+            </label>
+            <button type="submit">Search</button>
+        </form>
+        <p>{{ total }} stored stories.</p>
+        <div class="viewer-table-wrap">
+            <table>
+                <thead>
+                    <tr>
+                        {% for column in columns %}
+                            <th aria-sort="{{ column.ariaSort }}">
+                                <a href="{{ column.href }}">{{ column.label }}{% if column.marker %} {{ column.marker }}{% endif %}</a>
+                            </th>
+                        {% endfor %}
+                        <th>Excerpt</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for entry in entries %}
+                        <tr>
+                            <td>{{ entry.published }}</td>
+                            <td>{{ entry.source }}</td>
+                            <td>
+                                {% if entry.link %}
+                                    <a href="{{ entry.link }}" rel="noopener noreferrer">{{ entry.title }}</a>
+                                {% else %}
+                                    {{ entry.title }}
+                                {% endif %}
+                            </td>
+                            <td>{{ entry.location }}</td>
+                            <td>{{ entry.content }}</td>
+                        </tr>
+                    {% else %}
+                        <tr>
+                            <td colspan="5">No stories matched.</td>
+                        </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+            <nav>
+                {% if page > 1 %}
+                    <a href="{{ prevHref }}">Previous</a>
+                {% endif %}
+                <span>Page {{ page }} of {{ pageCount }}</span>
+                {% if page < pageCount %}
+                    <a href="{{ nextHref }}">Next</a>
+                {% endif %}
+            </nav>
+    {% endif %}
+</div>
+{% endblock %}

@@ -1,5 +1,6 @@
 # Point a repository push trigger at this file to build and deploy automatically.
 # Create the Artifact Registry Docker repository in _ARTIFACT_REGION before the first build.
+# Run scripts/setup-cloud-sql.sh in Cloud Shell before deploying this configuration.
 # The build service account needs Artifact Registry Writer, Cloud Run Developer,
 # Logs Writer, and Service Account User on the Cloud Run runtime service account.
 steps:
@@ -30,11 +31,17 @@ steps:
       - "--region=${_REGION}"
       - "--platform=managed"
       - "--port=3000"
+      - "--execution-environment=gen2"
+      - "--add-cloudsql-instances=${_INSTANCE_CONNECTION_NAME}"
+      - "--update-env-vars=INSTANCE_CONNECTION_NAME=${_INSTANCE_CONNECTION_NAME},DB_NAME=${_DB_NAME},DB_USER=${_DB_USER},RSS_ENABLED=true"
+      # Reference the stored secret; no database password is included in this file.
+      # update-secrets preserves TYPESENSE_API_KEY configured by setup-typesense.sh.
+      - "--update-secrets=DB_PASSWORD=${_DB_PASSWORD_SECRET}:latest"
       # Keep CPU available for RSS polling when there are no HTTP requests.
       - "--no-cpu-throttling"
       - "--min=1"
-      - "--cpu=1"
-      - "--memory=512Mi"
+      - "--cpu=4"
+      - "--memory=16Gi"
       - "--quiet"
 
 images:
@@ -45,6 +52,10 @@ substitutions:
   _ARTIFACT_REGION: "us-west1"
   _REPOSITORY: "cloud-run-source-deploy"
   _SERVICE: "sfhacksxgdg2026-git"
+  _INSTANCE_CONNECTION_NAME: "sfsu-hackathon-2026:us-west2:sfhacksxgdg2026-db"
+  _DB_NAME: "timeline"
+  _DB_USER: "timeline"
+  _DB_PASSWORD_SECRET: "sfhacksxgdg2026-db-password"
 
 options:
   logging: "CLOUD_LOGGING_ONLY"

@@ -1,5 +1,6 @@
 node_modules/
 
+# Environment settings and credentials stay local; only the example is tracked.
 .env
 .env.*
 !.env.example

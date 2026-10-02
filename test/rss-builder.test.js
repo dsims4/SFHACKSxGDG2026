@@ -4,14 +4,14 @@ const path = require("node:path");
 const { setTimeout: sleep } = require("node:timers/promises");
 const {
     readConfig, parseDate, inCurrentYearWindow, getContent, shouldSkip,
-    extractLocation, storyID, buildDoc, fetchSingleFeed, fetchFeeds,
+    extractImages, extractLocation, storyID, buildDoc, fetchSingleFeed, fetchFeeds,
     ensureTypesenseCollection, upsertTypesenseDocuments, backfillTypesense,
     insertStories, fetchOnce, startRSSBuilder
 } = require("../rss-builder/rss_builder");
 const geoHints = require("../rss-builder/geo-hints.json");
 
 const config = {
-    databaseURL: "postgresql://unused",
+    databaseConfig: { connectionString: "postgresql://unused" },
     typesenseURL: "https://search.example",
     typesenseAPIKey: "test-key",
     typesenseCollection: "timeline_entries",
@@ -73,7 +73,7 @@ test("RSS is optional until configured, with explicit enable/disable and validat
     assert.equal(readConfig({}), null);
     assert.equal(readConfig({ RSS_ENABLED: "false", DATABASE_URL: "set", TYPESENSE_API_KEY: "set" }), null);
     assert.throws(() => readConfig({ RSS_ENABLED: "true" }), /DATABASE_URL/);
-    assert.throws(() => readConfig({ RSS_ENABLED: "true", DATABASE_URL: "set" }), /TYPESENSE_API_KEY/);
+    assert.equal(readConfig({ RSS_ENABLED: "true", DATABASE_URL: "set" }).typesenseAPIKey, null);
     assert.throws(() => readConfig({ RSS_ENABLED: "yes" }), /true or false/);
     const env = { DATABASE_URL: "set", TYPESENSE_API_KEY: "set" };
     assert.equal(readConfig(env).maxWorkers, 10);
@@ -132,7 +132,7 @@ test("document hashes and timestamp serialization stay compatible with Python", 
 test("RSS parsing handles CDATA, content fallback, dates, Reuters titles, and exclusions", async (t) => {
     const date = "Sun, 01 Mar 2026 12:00:00 GMT";
     const xml = rss([
-        item("Paris &amp; London - Reuters", date, "<p>Summary</p>", "<content:encoded><![CDATA[Full text]]></content:encoded>"),
+        item("Paris &amp; London - Reuters", date, "<p>Summary</p></item>", "<content:encoded><![CDATA[Full text]]></content:encoded>"),
         item("Opinion | Skip", date),
         item("Old story", "Wed, 01 Jan 2025 00:00:00 GMT"),
         item("Future story", "Fri, 01 Jan 2027 00:00:00 GMT"),
@@ -147,10 +147,15 @@ test("RSS parsing handles CDATA, content fallback, dates, Reuters titles, and ex
     assert.equal(result.error, null);
     assert.equal(result.entries.length, 2);
     assert.equal(result.entries[0].title, "Paris & London");
-    assert.equal(result.entries[0].content, "<p>Summary</p>");
+    assert.equal(result.entries[0].content, "<p>Summary</p></item>");
     assert.equal(result.entries[1].content, "Full text");
     assert.equal(result.entries[1].link, null);
     assert.equal(result.entries[1].location_name, "Tokyo");
+    assert.match(result.entries[0].item_xml, /^<item>[\s\S]*<\/item>$/);
+    assert.match(result.entries[0].item_xml, /Paris &amp; London - Reuters/);
+    assert.match(result.entries[0].item_xml, /<!\[CDATA\[<p>Summary<\/p><\/item>\]\]>/);
+    assert.doesNotMatch(result.entries[0].item_xml, /Opinion \| Skip/);
+    assert.match(result.entries[1].item_xml, /<title>Tokyo<\/title>/);
 });
 
 test("Atom summaries, published dates, and updated-only entries are supported", async (t) => {
@@ -170,6 +175,8 @@ test("Atom summaries, published dates, and updated-only entries are supported", 
     assert.equal(result.entries[0].content, "<p>Summary</p>");
     assert.equal(result.entries[0].publication_date.toISOString(), "2026-03-01T12:00:00.000Z");
     assert.equal(result.entries[1].publication_date.toISOString(), "2026-03-01T12:00:00.000Z");
+    assert.match(result.entries[0].item_xml, /<entry>[\s\S]*London news[\s\S]*<\/entry>/);
+    assert.match(result.entries[1].item_xml, /<title>Paris<\/title>/);
 });
 
 test("feed errors are isolated and parallel fetches honor the worker limit", async (t) => {
@@ -194,14 +201,25 @@ test("feed errors are isolated and parallel fetches honor the worker limit", asy
 test("batched SQL uses parameters, commits all batches, and rolls back failed inserts", async () => {
     const database = fakeDatabase();
     const story = { ...makeStory(), title: "'); DROP TABLE entries; --" };
-    await insertStories(database, Array.from({ length: 201 }, () => story));
+    const stories = Array.from({ length: 201 }, (_, index) => ({
+        ...story,
+        link: `https://example.com/story-${index}`
+    }));
+    const extra = { url: "https://cdn.example/extra.jpg", mime: null, source: "html" };
+    stories.push({ ...stories[0], images: [extra] });
+    await insertStories(database, stories);
     const inserts = database.calls.filter((call) => call.sql.includes("INSERT INTO"));
     assert.equal(inserts.length, 2);
-    assert.equal(inserts[0].values.length, 200 * 13);
-    assert.equal(inserts[1].values.length, 13);
+    assert.equal(inserts[0].values.length, 200 * 15);
+    assert.equal(inserts[1].values.length, 15);
     assert.equal(inserts[0].values[0], story.title);
+    assert.equal(inserts[0].values[13], JSON.stringify([extra]));
+    assert.equal(inserts[0].values[14], null);
+    assert.equal(inserts[1].values[4], "https://example.com/story-200");
+    assert.equal(inserts[1].values[13], "[]");
     assert(!inserts[0].sql.includes(story.title));
-    assert.match(inserts[0].sql, /ON CONFLICT \(source, link\) DO NOTHING/);
+    assert.match(inserts[0].sql, /item_xml/);
+    assert.match(inserts[0].sql, /ON CONFLICT \(source, link\) DO UPDATE SET\s+images = EXCLUDED\.images,\s+item_xml = COALESCE\(EXCLUDED\.item_xml, entries\.item_xml\)/);
     assert.equal(database.calls.at(-1).sql, "COMMIT");
     assert.equal(database.released, 1);
 
@@ -224,12 +242,74 @@ test("Typesense creates missing collections and reports authentication failures"
     });
     await ensureTypesenseCollection(config);
     assert.equal(created.name, "timeline_entries");
-    assert.equal(created.fields.length, 14);
+    assert.equal(created.fields.length, 15);
+    assert.equal(created.fields.at(-1).name, "images");
     assert.equal(created.default_sorting_field, "publication_date");
     t.mock.method(global, "fetch", async (url) => {
         return url.endsWith("/health") ? Response.json({ ok: true }) : new Response("denied", { status: 401 });
     });
     await assert.rejects(ensureTypesenseCollection(config), /401/);
+});
+
+test("Typesense adds the images field when the collection already exists", async (t) => {
+    let patched = null;
+    t.mock.method(global, "fetch", async (url, options) => {
+        if (url.endsWith("/health")) return Response.json({ ok: true });
+        if (options.method === "PATCH") {
+            patched = JSON.parse(options.body);
+            return Response.json({ ok: true });
+        }
+        return Response.json({
+            name: "timeline_entries",
+            fields: [{ name: "title", type: "string" }]
+        });
+    });
+    await ensureTypesenseCollection(config);
+    assert.deepEqual(patched.fields, [{ name: "images", type: "string[]", optional: true }]);
+});
+
+test("image extraction keeps enclosure, media, and html urls and skips non-images", async (t) => {
+    const date = "Sun, 01 Mar 2026 12:00:00 GMT";
+    const xml = `<?xml version="1.0"?><rss version="2.0"
+        xmlns:media="http://search.yahoo.com/mrss/"
+        xmlns:content="http://purl.org/rss/1.0/modules/content/">
+        <channel><title>News</title>
+        <item>
+            <title>Paris photo</title>
+            <link>https://example.com/story</link>
+            <pubDate>${date}</pubDate>
+            <description><![CDATA[<p>Summary</p>]]></description>
+            <enclosure url="https://cdn.example/enc.jpg" type="image/jpeg"/>
+            <enclosure url="https://cdn.example/audio.mp3" type="audio/mpeg"/>
+            <media:content url="https://cdn.example/clip.mp4" medium="video" type="video/mp4"/>
+            <media:content url="https://cdn.example/hero.jpg" medium="image" type="image/jpeg"/>
+            <media:thumbnail url="https://cdn.example/thumb.jpg"/>
+            <media:group>
+                <media:content url="https://cdn.example/group.jpg" medium="image"/>
+            </media:group>
+            <content:encoded><![CDATA[
+                <img src="/inline.png">
+                <img srcset="https://cdn.example/hero.jpg 640w">
+                <img src="data:image/gif;base64,AAAA">
+            ]]></content:encoded>
+        </item>
+        </channel></rss>`;
+    t.mock.method(global, "fetch", async () => new Response(xml));
+    const result = await fetchSingleFeed({ name: "Other", url: "https://news.example" }, {
+        now: new Date("2026-03-02T00:00:00Z")
+    });
+    assert.equal(result.error, null);
+    assert.deepEqual(result.entries[0].images, [
+        { url: "https://cdn.example/enc.jpg", mime: "image/jpeg", source: "enclosure" },
+        { url: "https://cdn.example/hero.jpg", mime: "image/jpeg", source: "media:content" },
+        { url: "https://cdn.example/thumb.jpg", mime: null, source: "media:thumbnail" },
+        { url: "https://cdn.example/group.jpg", mime: null, source: "media:content" },
+        { url: "https://example.com/inline.png", mime: null, source: "html" }
+    ]);
+    assert.deepEqual(extractImages({
+        link: "https://example.com/story",
+        enclosure: { url: "https://cdn.example/audio.mp3", type: "audio/mpeg" }
+    }), []);
 });
 
 test("Typesense checks every NDJSON import result even after HTTP 200", async (t) => {
@@ -255,32 +335,38 @@ test("backfill preserves existing IDs and adds location hints to older rows", as
     });
     const story = makeStory();
     await backfillTypesense({
-        async query() { return { rows: [{ ...story, has_location: false, location_name: null, lat: null }] }; }
+        async query() {
+            return {
+                rows: [{
+                    ...story,
+                    has_location: false,
+                    location_name: null,
+                    lat: null,
+                    images: [{ url: "https://cdn.example/a.jpg", mime: "image/jpeg", source: "enclosure" }]
+                }]
+            };
+        }
     }, config);
     assert.equal(imported.id, story.id);
     assert.equal(imported.location_name, "Paris");
     assert.equal(imported.lat, 48.8566);
+    assert.deepEqual(imported.images, ["https://cdn.example/a.jpg"]);
 });
 
-test("a full poll reads the bundled feeds, commits candidates, and imports them", async (t) => {
+test("a full poll stores stories in PostgreSQL without Typesense credentials", async (t) => {
     const database = fakeDatabase();
-    let imported = 0;
     const date = new Date(Date.UTC(new Date().getUTCFullYear(), 0, 1)).toUTCString();
-    t.mock.method(global, "fetch", async (url, options) => {
-        if (url.startsWith(config.typesenseURL)) {
-            assert.equal(database.calls.at(-1).sql, "COMMIT");
-            const docs = options.body.split("\n");
-            imported += docs.length;
-            return new Response(docs.map(() => JSON.stringify({ success: true })).join("\n"));
-        }
+    t.mock.method(global, "fetch", async (url) => {
+        assert(!url.startsWith(config.typesenseURL));
         return new Response(rss(item("London news", date)));
     });
-    await fetchOnce(database, config);
-    assert.equal(imported, 17);
+    const stories = await fetchOnce(database, { ...config, typesenseAPIKey: null });
+    assert.equal(stories.length, 17);
+    assert.equal(database.calls.at(-1).sql, "COMMIT");
     assert.equal(database.released, 1);
 });
 
-test("shutdown cancels an in-flight feed request and closes the database pool", async (t) => {
+test("shutdown cancels an in-flight feed request and leaves a shared database pool open", async (t) => {
     const database = fakeDatabase();
     let feedStarted;
     const started = new Promise((resolve) => { feedStarted = resolve; });
@@ -294,5 +380,72 @@ test("shutdown cancels an in-flight feed request and closes the database pool", 
     const builder = startRSSBuilder(config, database);
     await started;
     await builder.stop();
-    assert.equal(database.ended, 1);
+    assert.equal(database.ended, 0);
+});
+
+test("the worker automatically ingests with PostgreSQL alone", { timeout: 3000 }, async (t) => {
+    const database = fakeDatabase();
+    let stored;
+    const committed = new Promise((resolve) => { stored = resolve; });
+    const query = database.query;
+    database.query = async (sql, values) => {
+        const result = await query(sql, values);
+        if (sql === "COMMIT" && database.calls.some((call) => call.sql.includes("INSERT INTO"))) stored();
+        return result;
+    };
+    const date = new Date(Date.UTC(new Date().getUTCFullYear(), 0, 1)).toUTCString();
+    t.mock.method(global, "fetch", async (url) => {
+        assert(!url.startsWith(config.typesenseURL));
+        return new Response(rss(item("Paris news", date)));
+    });
+    const databaseConfig = readConfig({ DATABASE_URL: "postgresql://unused" });
+    const builder = startRSSBuilder({ ...databaseConfig, typesenseURL: config.typesenseURL }, database);
+    t.after(() => builder.stop());
+    await committed;
+    await builder.stop();
+    assert(database.calls.some((call) => call.sql.includes("INSERT INTO entries")));
+    assert.equal(database.ended, 0);
+});
+
+test("search outages do not stop database writes and recovery backfills stored rows", { timeout: 3000 }, async (t) => {
+    const database = fakeDatabase();
+    let polls = 0;
+    let imports = 0;
+    let recovered;
+    const recovery = new Promise((resolve) => { recovered = resolve; });
+    const errors = [];
+    const query = database.query;
+    database.query = async (sql, values) => {
+        const result = await query(sql, values);
+        if (sql.includes("INSERT INTO entries")) polls++;
+        if (sql.includes("SELECT title, content, source")) {
+            return { rows: [{ ...makeStory(), images: [] }] };
+        }
+        return result;
+    };
+    t.mock.method(console, "error", (...args) => errors.push(args.join(" ")));
+    const date = new Date(Date.UTC(new Date().getUTCFullYear(), 0, 1)).toUTCString();
+    t.mock.method(global, "fetch", async (url, options) => {
+        if (!url.startsWith(config.typesenseURL)) return new Response(rss(item("Paris news", date)));
+        assert(polls > 0, "Stories must be saved before search is contacted.");
+        if (url.endsWith("/health")) {
+            return polls === 1 ? new Response("Unavailable", { status: 503 }) : Response.json({ ok: true });
+        }
+        if (url.includes("/documents/import")) {
+            const docs = options.body.split("\n").map(JSON.parse);
+            imports++;
+            // The first successful import comes from the database backfill.
+            if (imports === 1) assert.equal(docs[0].id, makeStory().id);
+            if (imports === 2) recovered();
+            return new Response(docs.map(() => JSON.stringify({ success: true })).join("\n"));
+        }
+        return Response.json({ fields: [{ name: "images" }] });
+    });
+    const builder = startRSSBuilder({ ...config, pollSeconds: 0.01 }, database);
+    t.after(() => builder.stop());
+    await recovery;
+    await builder.stop();
+    assert(polls >= 3);
+    assert(errors.some((error) => error.includes("Typesense sync failed")));
+    assert.equal(database.ended, 0);
 });

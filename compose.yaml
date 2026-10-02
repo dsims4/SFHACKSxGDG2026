@@ -1,0 +1,54 @@
+# Local stack: web app, PostgreSQL for the RSS worker, and Typesense.
+# RSS stores stories in PostgreSQL; Typesense adds optional search indexing.
+
+services:
+  postgres:
+    image: postgres:16-bookworm
+    environment:
+      POSTGRES_USER: rss
+      POSTGRES_PASSWORD: "${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in your local .env or shell}"
+      POSTGRES_DB: rss
+    ports:
+      - "5432:5432"
+    volumes:
+      - rss-data:/var/lib/postgresql/data
+      - ./rss-builder/schema.sql:/docker-entrypoint-initdb.d/01-schema.sql:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U rss -d rss"]
+      interval: 5s
+      timeout: 5s
+      retries: 12
+      start_period: 10s
+
+  typesense:
+    image: typesense/typesense:27.1
+    command: --data-dir /data --api-key=local-dev-key --enable-cors
+    ports:
+      - "8108:8108"
+    volumes:
+      - typesense-data:/data
+
+  app:
+    build: .
+    ports:
+      - "3000:3000"
+    environment:
+      NODE_ENV: production
+      PORT: "3000"
+      DATABASE_URL: postgresql://rss@postgres:5432/rss
+      PGPASSWORD: "${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in your local .env or shell}"
+      TYPESENSE_URL: http://typesense:8108
+      TYPESENSE_API_KEY: local-dev-key
+      TYPESENSE_COLLECTION: timeline_entries
+      RSS_ENABLED: "true"
+      RSS_POLL_SECONDS: "600"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      typesense:
+        condition: service_started
+    restart: unless-stopped
+
+volumes:
+  rss-data:
+  typesense-data:
