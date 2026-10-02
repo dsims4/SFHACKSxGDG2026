@@ -1,6 +1,7 @@
 node_modules/
 
-# Shared .env contains only public connection settings; credentials stay local.
+# Environment settings and credentials stay local; only the example is tracked.
+.env
 .env.*
 !.env.example
 

@@ -6,7 +6,7 @@ services:
     image: postgres:16-bookworm
     environment:
       POSTGRES_USER: rss
-      POSTGRES_PASSWORD: rss
+      POSTGRES_PASSWORD: "${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in your local .env or shell}"
       POSTGRES_DB: rss
     ports:
       - "5432:5432"
@@ -35,7 +35,8 @@ services:
     environment:
       NODE_ENV: production
       PORT: "3000"
-      DATABASE_URL: postgresql://rss:rss@postgres:5432/rss
+      DATABASE_URL: postgresql://rss@postgres:5432/rss
+      PGPASSWORD: "${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in your local .env or shell}"
       TYPESENSE_URL: http://typesense:8108
       TYPESENSE_API_KEY: local-dev-key
       TYPESENSE_COLLECTION: timeline_entries

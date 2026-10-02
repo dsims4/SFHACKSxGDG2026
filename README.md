@@ -12,12 +12,11 @@ With Node.js 24 available, install the locked dependencies:
 npm ci
 ```
 
-The committed `.env` contains shared development settings. Put personal overrides
-and credentials in `.env.local`, which Git and Docker exclude. To start with an
-override template:
+Copy the environment template to a local `.env` before customizing settings.
+Git and Docker exclude `.env` and `.env.local`; only `.env.example` is tracked.
 
 ```bash
-cp .env.example .env.local
+cp .env.example .env
 ```
 
 Start the server:
@@ -61,8 +60,8 @@ package manifest and lockfile.
 | `nodemailer` | Future email delivery |
 
 Email and rate-limit features are not wired into the starter.
-The shared `.env` contains no password. Personal environment files, dependencies,
-and private keys are excluded from Git.
+Environment files, dependencies, and private keys are excluded from Git.
+The tracked `.env.example` contains connection settings and placeholders.
 
 ## Shared database access
 
@@ -70,10 +69,10 @@ Teammates connect to the same Cloud SQL `timeline` database through the
 [Cloud SQL Auth Proxy](https://docs.cloud.google.com/sql/docs/postgres/connect-auth-proxy).
 They need `gcloud` and the proxy available on their machine, plus Cloud SQL Client
 access to project `sfsu-hackathon-2026` and Secret Manager Secret Accessor access to
-secret `sfhacksxgdg2026-db-password`. The shared file alone does not grant cloud access.
+secret `sfhacksxgdg2026-db-password`. The template alone does not grant cloud access.
 
-An authorized teammate can generate their credentials before creating any manual
-`.env.local` overrides:
+After copying `.env.example` to `.env`, an authorized teammate can generate their
+credentials before creating any manual `.env.local` overrides:
 
 ```bash
 gcloud auth login
@@ -94,7 +93,7 @@ cloud-sql-proxy --gcloud-auth --address=127.0.0.1 --port=5433 \
 In another terminal, run `npm start` and open `/viewer` or `/dbviewer`. Keep the proxy
 running while the app uses the database. `npm run db:init` also reads `.env.local`.
 Process environment variables take precedence over both files; `.env.local` takes
-precedence over the shared `.env`. Cloud Run continues to use its managed socket
+precedence over `.env`. Cloud Run continues to use its managed socket
 and Secret Manager settings, because environment files are excluded from its image.
 
 To grant a teammate access, a project administrator can replace `TEAMMATE_EMAIL`
@@ -155,6 +154,16 @@ The root image includes the RSS worker and all its dependencies. There is no
 separate Python image or worker build. To enable RSS in the container, pass its
 settings with `--env-file .env.local` and use database and Typesense addresses reachable
 from inside the container.
+
+For the local PostgreSQL and Typesense stack, set `POSTGRES_PASSWORD` in your
+ignored `.env` or shell, then run:
+
+```bash
+docker compose up --build
+```
+
+Compose requires that password and passes it to PostgreSQL and the app through
+environment variables. The app's connection URL contains no password.
 
 `cloudbuild.yaml` deploys this image to `sfhacksxgdg2026-git` in `us-west2`.
 The deployment attaches Cloud SQL and injects its password from Secret Manager.
