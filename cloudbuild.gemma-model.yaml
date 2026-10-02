@@ -1,0 +1,24 @@
+# Invoked by setup-gemma.sh with --no-source and a dedicated build identity.
+# Copy Google's public model into our regional bucket without local downloads.
+steps:
+  - id: "cache-gemma"
+    name: "gcr.io/google.com/cloudsdktool/google-cloud-cli:slim"
+    entrypoint: "bash"
+    args:
+      - "-eu"
+      - "-c"
+      - |
+        gcloud storage rsync --recursive \
+          gs://vertex-model-garden-public-us/gemma4/gemma-4-31B-it \
+          gs://${_MODEL_BUCKET}/gemma-4-31B-it
+        gcloud storage ls \
+          gs://${_MODEL_BUCKET}/gemma-4-31B-it/config.json \
+          gs://${_MODEL_BUCKET}/gemma-4-31B-it/tokenizer_config.json \
+          gs://${_MODEL_BUCKET}/gemma-4-31B-it/model.safetensors.index.json
+
+substitutions:
+  _MODEL_BUCKET: "sfsu-hackathon-2026-gemma-models-us-central1"
+
+timeout: "3600s"
+options:
+  logging: "CLOUD_LOGGING_ONLY"

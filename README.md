@@ -41,8 +41,10 @@ npm run dev
 - `rss-builder/`: JavaScript RSS worker, feed list, geographic hints, and SQL schema.
 - `services/db.js`: shared PostgreSQL pool, Cloud SQL settings, and schema initialization.
 - `services/article-summaries.js`: article JSON, summary prompts, model response validation, and summary storage.
+- `services/gemma.js`: authenticated vLLM requests and summary generation.
 - `scripts/setup-cloud-sql.sh`: one-time Google Cloud resource setup.
 - `scripts/setup-typesense.sh`: persistent Typesense VM and Cloud Run connection setup.
+- `scripts/setup-gemma.sh`: Gemma 4 31B model cache and GPU Cloud Run deployment.
 - `.env.example`: local defaults and optional future service settings.
 
 ## Dependencies
@@ -198,23 +200,96 @@ applies this schema to a configured database.
   calls the supplied generator, and saves its `{ text: "[...JSON bullets...]" }`
   response. Generation or validation failures leave any existing summary intact.
 
-Example for the future Gemma 4 31B Instruct deployment:
+Example using the Gemma 4 31B Instruct deployment:
 
 ```javascript
-const { summarizeArticle } = require("./services/article-summaries");
+const { summarizeWithGemma } = require("./services/gemma");
 
-// Supply the vLLM adapter when the deployment is ready. It must return { text }.
-const saved = await summarizeArticle(pool, "123", {
-    model: configuredModelName,
-    generateText: generateWithGemma
-});
+const saved = await summarizeWithGemma(pool, "123");
 console.log(saved.summary); // A JavaScript array, parsed from PostgreSQL JSONB.
 ```
 
 The database value is `["First point", "Second point", "Third point", "Fourth point", "Fifth point"]`,
-not a JSON string containing another JSON string. Summarization is explicit for
-now; the vLLM HTTP adapter and automatic scheduling will be connected when that
-deployment is available. No model endpoint or credentials are required to run the app.
+not a JSON string containing another JSON string. Summarization remains explicit;
+RSS ingestion does not automatically submit articles to the GPU service.
+No model endpoint or credentials are required to run the rest of the app.
+
+## Gemma 4 on Cloud Run
+
+Run the setup from an updated checkout in Cloud Shell with Node.js and gcloud
+already available:
+
+```bash
+bash scripts/setup-gemma.sh
+```
+
+This follows [Google's Gemma 4 31B Cloud Run deployment guide](https://codelabs.developers.google.com/codelabs/cloud-run/cloud-run-gpu-rtx-pro-6000-gemma4-vllm).
+It creates `sfhacksxgdg2026-gemma` in `us-central1` with one RTX PRO 6000 GPU
+(96 GB VRAM), 20 CPUs, and 80 GiB of system RAM. These are separate resources
+from the website. The service uses a maximum of one instance and scales to zero
+when idle; GPU, CPU, and memory are billed while an instance runs. Model storage
+continues to incur charges. GPU quota and capacity must be available in this region.
+Cloud Run's [supported GPU regions and requirements](https://docs.cloud.google.com/run/docs/configuring/services/gpu)
+determine this location and machine configuration.
+
+The script first copies Google's public `google/gemma-4-31B-it` weights into
+`gs://sfsu-hackathon-2026-gemma-models-us-central1/gemma-4-31B-it` using
+`cloudbuild.gemma-model.yaml`. This build uses `--no-source`, a dedicated copy
+identity, and Cloud Logging, so it does not require reading a source archive from
+the build upload bucket. No Hugging Face token or local model download is needed.
+Reruns synchronize the existing cache without deleting objects.
+
+The GPU service runs Google's prebuilt `pytorch-vllm-serve:gemma4` container.
+Run:ai Model Streamer reads the cached weights through Direct VPC egress and
+Private Google Access. The runtime identity has read access to the model bucket;
+the build identity can update its objects. The setup requires permission to manage
+Cloud Run, service accounts and IAM bindings, networking, Cloud Storage, and builds.
+The operator must be able to invoke the private model service for its smoke test.
+
+The model is served as `google/gemma-4-31B-it`, with FP8 weights/cache, a 16,384-token
+context, and four concurrent sequences. Its Cloud Run endpoint requires IAM
+authentication. Only the application's identity is explicitly granted service
+invocation access by this script. The script checks a real five-bullet inference
+before setting `GEMMA_URL` and `GEMMA_MODEL` on the website. Future application
+deployments preserve these environment settings; normal Git pushes do not rebuild
+or redeploy the GPU service.
+
+The JavaScript adapter requests a five-string JSON schema, disables thinking for
+summaries, checks for a completed response, and validates the returned array.
+It obtains a short-lived identity token from Google's metadata server when running
+on Cloud Run. vLLM's `choices[0].message.content` is normalized to `{ text }` before
+the summary is saved. No API key or npm dependency is required.
+
+For a manual inference check from Cloud Shell, obtain a short-lived token without
+printing it:
+
+```bash
+export GEMMA_URL="$(gcloud run services describe sfhacksxgdg2026-gemma \
+  --project=sfsu-hackathon-2026 --region=us-central1 --format='value(status.url)')"
+export GEMMA_ID_TOKEN="$(gcloud auth print-identity-token)"
+node scripts/check-gemma.js
+```
+
+With the database connection/proxy configured as described above, summarize one
+existing article by ID:
+
+```bash
+npm run summarize -- 123
+unset GEMMA_ID_TOKEN
+```
+
+The token expires; refresh it for later local invocations. Cloud Run handles token
+refresh by requesting a token for each model call. `GEMMA_TIMEOUT_MS` defaults to
+900,000 milliseconds to allow for model cold starts. Startup and the first model
+copy can take several minutes. Do not commit identity tokens into environment files.
+
+If deployment fails, inspect its logs and verify the Cloud Run RTX PRO 6000 quota
+for `us-central1`, then rerun the setup:
+
+```bash
+gcloud run services logs read sfhacksxgdg2026-gemma \
+  --project=sfsu-hackathon-2026 --region=us-central1 --limit=80
+```
 
 ## Container
 

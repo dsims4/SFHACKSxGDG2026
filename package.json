@@ -8,6 +8,7 @@
     "db:init": "node scripts/db-init.js",
     "db:env": "node scripts/setup-db-env.js",
     "rss:repair-content": "node scripts/repair-rss-content.js",
+    "summarize": "node scripts/summarize-article.js",
     "test": "node --test test/*.test.js"
   },
   "repository": {
