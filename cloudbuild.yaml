@@ -39,8 +39,8 @@ steps:
       # Keep CPU available for RSS polling when there are no HTTP requests.
       - "--no-cpu-throttling"
       - "--min=1"
-      - "--cpu=1"
-      - "--memory=512Mi"
+      - "--cpu=4"
+      - "--memory=16Gi"
       - "--quiet"
 
 images:
