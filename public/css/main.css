@@ -292,6 +292,10 @@ body.dbviewer-page {
     cursor: pointer;
 }
 
+.dbviewer .toggle-more[hidden] {
+    display: none;
+}
+
 .dbviewer .muted {
     color: #a3b5d4;
 }
