@@ -41,7 +41,7 @@ test("the adapter obtains a correctly scoped identity token and normalizes struc
         assert.equal(request.chat_template_kwargs.enable_thinking, false);
         assert.equal(request.stream, false);
         assert.deepEqual(request.response_format.json_schema.schema, {
-            type: "array", minItems: 5, maxItems: 5, items: { type: "string", minLength: 1 }
+            type: "array", minItems: 0, maxItems: 5, items: { type: "string", minLength: 1 }
         });
         return completed();
     });
@@ -81,7 +81,7 @@ test("metadata failures prevent inference and upstream errors do not disclose re
 test("truncated, malformed, and invalid model responses are rejected", async () => {
     for (const choice of [
         { finish_reason: "length", message: { content: JSON.stringify(bullets) } },
-        { finish_reason: "stop", message: { content: "[]" } },
+        { finish_reason: "stop", message: { content: "{}" } },
         { finish_reason: "stop", message: { content: "not JSON" } },
         { finish_reason: "stop", message: {} },
         {}

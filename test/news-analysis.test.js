@@ -7,7 +7,7 @@ test("article analysis requires a known topic and five summary strings", () => {
     const summary = ["one", "two", "three", "four", "five"];
     assert.deepEqual(parseArticle(JSON.stringify({ topics: ["economics"], summary })), { topics: ["economics"], summary });
     assert.throws(() => parseArticle(JSON.stringify({ topics: ["made-up"], summary })));
-    assert.throws(() => parseArticle(JSON.stringify({ topics: ["economics"], summary: ["one"] })));
+    assert.throws(() => parseArticle(JSON.stringify({ topics: ["economics"], summary: [1] })));
 });
 
 test("topic citations must reference supplied article IDs and preserve bigint precision", () => {
@@ -63,4 +63,13 @@ test("articles can cover several topics and duplicate labels are removed", () =>
     assert.deepEqual(result.topics, ["economics", "environment"]);
     assert.throws(() => parseArticle(JSON.stringify({ topics: [], summary: result.summary })));
     assert.throws(() => parseArticle(JSON.stringify({ topics: ["science", "unknown"], summary: result.summary })));
+});
+
+
+test("topic summaries may be empty or partial without empty bullet slots", () => {
+    assert.deepEqual(parseTopic('{"bullets":[]}', []), []);
+    assert.deepEqual(parseTopic(JSON.stringify({ bullets: [
+        { text: "", article_ids: [] },
+        { text: "Supported fact", article_ids: ["7"] }
+    ] }), [{ id: "7" }]), [{ text: "Supported fact", article_ids: ["7"] }]);
 });

@@ -9,7 +9,7 @@
             <div class="topic-title"><h2><a href="/topic/{{ topic.id }}">{{ topic.topic | capitalize }}</a></h2></div>
             <p>{{ topic.date }} · UTC</p>
             <div class="topic-summary"><ul>
-                {% for bullet in topic.summary %}<li>{{ bullet }}</li>{% endfor %}
+                {% for bullet in topic.summary %}{% if bullet | trim %}<li>{{ bullet }}</li>{% endif %}{% endfor %}
             </ul></div>
             <a href="/topic/{{ topic.id }}">Read topic and articles →</a>
         </section>

@@ -540,3 +540,15 @@ exists. Failed or interrupted polls wait until the next interval; the running ap
 checks a claimed schedule at most once per minute. Continuous operation requires
 the existing minimum instance and always-allocated CPU deployment settings.
 This replaces the earlier today-only behavior described above.
+
+
+### Partial summaries
+
+Article and topic summaries now contain zero to five populated bullets. When the
+source supports fewer facts, Gemma must omit unused bullets and return `[]` for
+no supported facts, rather than padding with missing-information messages.
+Whitespace-only slots are removed before storage; templates render only populated
+bullets. Startup migrates the database constraints. Active articles are progressively
+regenerated with classification version 3, and topic summaries refresh using a new
+prompt fingerprint so old filler can be replaced. Existing stored summaries are
+not erased while regeneration is pending.

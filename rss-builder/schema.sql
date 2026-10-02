@@ -40,21 +40,7 @@ CREATE TABLE IF NOT EXISTS article_summaries (
     model TEXT NOT NULL CHECK (BTRIM(model) <> ''),
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-    CONSTRAINT article_summaries_five_bullets CHECK (
-        CASE WHEN jsonb_typeof(summary) = 'array' THEN
-            jsonb_array_length(summary) = 5
-            AND jsonb_typeof(summary -> 0) = 'string'
-            AND jsonb_typeof(summary -> 1) = 'string'
-            AND jsonb_typeof(summary -> 2) = 'string'
-            AND jsonb_typeof(summary -> 3) = 'string'
-            AND jsonb_typeof(summary -> 4) = 'string'
-            AND (summary ->> 0) ~ '[^[:space:]]'
-            AND (summary ->> 1) ~ '[^[:space:]]'
-            AND (summary ->> 2) ~ '[^[:space:]]'
-            AND (summary ->> 3) ~ '[^[:space:]]'
-            AND (summary ->> 4) ~ '[^[:space:]]'
-        ELSE FALSE END
-    )
+    CONSTRAINT article_summaries_five_bullets CHECK (jsonb_typeof(summary) = 'array')
 );
 
 ALTER TABLE article_summaries ADD COLUMN IF NOT EXISTS topic TEXT CHECK (topic ~ '^[a-z][a-z-]{0,49}$');
@@ -90,3 +76,18 @@ CREATE TABLE IF NOT EXISTS worker_schedule (
     name TEXT PRIMARY KEY,
     next_run_at TIMESTAMPTZ NOT NULL
 );
+
+
+-- Accept only populated string bullets, with zero to five facts per summary.
+CREATE OR REPLACE FUNCTION valid_news_bullets(value JSONB) RETURNS BOOLEAN
+LANGUAGE SQL IMMUTABLE AS $$
+    SELECT CASE WHEN jsonb_typeof(value) = 'array' THEN
+        jsonb_array_length(value) <= 5 AND NOT EXISTS (
+            SELECT 1 FROM jsonb_array_elements(value) bullet
+            WHERE jsonb_typeof(bullet) <> 'string' OR (bullet #>> '{}') !~ '[^[:space:]]'
+        ) ELSE FALSE END;
+$$;
+ALTER TABLE article_summaries DROP CONSTRAINT IF EXISTS article_summaries_five_bullets;
+ALTER TABLE article_summaries ADD CONSTRAINT article_summaries_five_bullets CHECK (valid_news_bullets(summary));
+ALTER TABLE topic_summaries DROP CONSTRAINT IF EXISTS topic_summaries_summary_check;
+ALTER TABLE topic_summaries ADD CONSTRAINT topic_summaries_summary_check CHECK (valid_news_bullets(summary));

@@ -71,7 +71,7 @@ function createGemmaGenerator(config, fetchImplementation = fetch) {
                         name: "article_summary",
                         strict: true,
                         schema: schema || {
-                            type: "array", minItems: 5, maxItems: 5,
+                            type: "array", minItems: 0, maxItems: 5,
                             items: { type: "string", minLength: 1 }
                         }
                     }

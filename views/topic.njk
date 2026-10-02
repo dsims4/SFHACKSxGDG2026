@@ -5,7 +5,7 @@
     <div class="topic-page-title"><h1>{{ topic.topic | capitalize }}</h1><p>{{ topic.date }} · UTC</p></div>
     <section class="topic-general-summary">
         <h2>Topic summary</h2>
-        <ul>{% for bullet in topic.summary %}<li>{{ bullet }}</li>{% endfor %}</ul>
+        <ul>{% for bullet in topic.summary %}{% if bullet | trim %}<li>{{ bullet }}</li>{% endif %}{% endfor %}</ul>
     </section>
     <section class="topic-stories">
         <h2>Articles</h2>
@@ -13,8 +13,8 @@
         <article class="story-summary article-card">
             <h3>{% if article.link %}<a href="{{ article.link }}" target="_blank" rel="noopener noreferrer">{{ article.title or "Read original article" }}</a>{% else %}{{ article.title or "Untitled article" }}{% endif %}</h3>
             <p class="article-topics">{{ article.topics | join(" · ") }}</p>
-            {% if article.summary %}<ul>{% for bullet in article.summary %}<li>{{ bullet }}</li>{% endfor %}</ul>
-            {% else %}<p>Article summary is being prepared.</p>{% endif %}
+            {% if article.summary and article.summary.length %}<ul>{% for bullet in article.summary %}{% if bullet | trim %}<li>{{ bullet }}</li>{% endif %}{% endfor %}</ul>
+            {% endif %}
             {% if article.images.length %}<div class="article-images">
                 {% for image in article.images %}<img src="{{ image }}" alt="Image from the article" loading="lazy" referrerpolicy="no-referrer">{% endfor %}
             </div>{% endif %}
