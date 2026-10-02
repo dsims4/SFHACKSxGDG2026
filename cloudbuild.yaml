@@ -1,5 +1,5 @@
 # Point a repository push trigger at this file to build and deploy automatically.
-# Create the Artifact Registry Docker repository in _REGION before the first build.
+# Create the Artifact Registry Docker repository in _ARTIFACT_REGION before the first build.
 # The build service account needs Artifact Registry Writer, Cloud Run Developer,
 # Logs Writer, and Service Account User on the Cloud Run runtime service account.
 steps:
@@ -9,14 +9,14 @@ steps:
       - "build"
       - "--platform=linux/amd64"
       - "-t"
-      - "${_REGION}-docker.pkg.dev/$PROJECT_ID/${_REPOSITORY}/${_SERVICE}:$BUILD_ID"
+      - "${_ARTIFACT_REGION}-docker.pkg.dev/$PROJECT_ID/${_REPOSITORY}/${_SERVICE}:$BUILD_ID"
       - "."
 
   - id: "push"
     name: "gcr.io/cloud-builders/docker"
     args:
       - "push"
-      - "${_REGION}-docker.pkg.dev/$PROJECT_ID/${_REPOSITORY}/${_SERVICE}:$BUILD_ID"
+      - "${_ARTIFACT_REGION}-docker.pkg.dev/$PROJECT_ID/${_REPOSITORY}/${_SERVICE}:$BUILD_ID"
 
   - id: "deploy"
     name: "gcr.io/google.com/cloudsdktool/cloud-sdk:slim"
@@ -25,7 +25,7 @@ steps:
       - "run"
       - "deploy"
       - "${_SERVICE}"
-      - "--image=${_REGION}-docker.pkg.dev/$PROJECT_ID/${_REPOSITORY}/${_SERVICE}:$BUILD_ID"
+      - "--image=${_ARTIFACT_REGION}-docker.pkg.dev/$PROJECT_ID/${_REPOSITORY}/${_SERVICE}:$BUILD_ID"
       - "--project=$PROJECT_ID"
       - "--region=${_REGION}"
       - "--platform=managed"
@@ -33,12 +33,13 @@ steps:
       - "--quiet"
 
 images:
-  - "${_REGION}-docker.pkg.dev/$PROJECT_ID/${_REPOSITORY}/${_SERVICE}:$BUILD_ID"
+  - "${_ARTIFACT_REGION}-docker.pkg.dev/$PROJECT_ID/${_REPOSITORY}/${_SERVICE}:$BUILD_ID"
 
 substitutions:
-  _REGION: "us-west1"
+  _REGION: "us-west2"
+  _ARTIFACT_REGION: "us-west1"
   _REPOSITORY: "cloud-run-source-deploy"
-  _SERVICE: "sfhacksxgdg2026"
+  _SERVICE: "sfhacksxgdg2026-git"
 
 options:
   logging: "CLOUD_LOGGING_ONLY"
