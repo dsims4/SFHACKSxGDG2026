@@ -1,0 +1,156 @@
+[
+  {
+    "name": "London",
+    "country": "United Kingdom",
+    "lat": 51.501941,
+    "lng": -0.118668,
+    "level": "city"
+  },
+  {
+    "name": "New York",
+    "country": "United States of America",
+    "lat": 40.721562,
+    "lng": -73.995718,
+    "level": "city"
+  },
+  {
+    "name": "Kyiv",
+    "country": "Ukraine",
+    "lat": 50.435313,
+    "lng": 30.514682,
+    "level": "city"
+  },
+  {
+    "name": "Tokyo",
+    "country": "Japan",
+    "lat": 35.686963,
+    "lng": 139.749462,
+    "level": "city"
+  },
+  {
+    "name": "San Francisco",
+    "country": "United States of America",
+    "lat": 37.784263,
+    "lng": -122.3996,
+    "level": "city"
+  },
+  {
+    "name": "New Delhi",
+    "country": "India",
+    "lat": 28.600023,
+    "lng": 77.19998,
+    "level": "city"
+  },
+  {
+    "name": "Paris",
+    "country": "France",
+    "lat": 48.858092,
+    "lng": 2.352992,
+    "level": "city"
+  },
+  {
+    "name": "Nairobi",
+    "country": "Kenya",
+    "lat": -1.281401,
+    "lng": 36.814711,
+    "level": "city"
+  },
+  {
+    "name": "São Paulo",
+    "country": "Brazil",
+    "lat": -23.556734,
+    "lng": -46.626966,
+    "level": "city"
+  },
+  {
+    "name": "Sydney",
+    "country": "Australia",
+    "lat": -33.871373,
+    "lng": 151.212548,
+    "level": "city"
+  },
+  {
+    "name": "Cairo",
+    "country": "Egypt",
+    "lat": 30.051906,
+    "lng": 31.248022,
+    "level": "city"
+  },
+  {
+    "name": "Singapore",
+    "country": "Singapore",
+    "lat": 1.294979,
+    "lng": 103.853875,
+    "level": "city"
+  },
+  {
+    "name": "Berlin",
+    "country": "Germany",
+    "lat": 52.523764,
+    "lng": 13.399603,
+    "level": "city"
+  },
+  {
+    "name": "Beijing",
+    "country": "China",
+    "lat": 39.90172,
+    "lng": 116.394201,
+    "level": "city"
+  },
+  {
+    "name": "Mexico City",
+    "country": "Mexico",
+    "lat": 19.444388,
+    "lng": -99.132934,
+    "level": "city"
+  },
+  {
+    "name": "Lagos",
+    "country": "Nigeria",
+    "lat": 6.445208,
+    "lng": 3.389585,
+    "level": "city"
+  },
+  {
+    "name": "Buenos Aires",
+    "country": "Argentina",
+    "lat": -34.610715,
+    "lng": -58.432513,
+    "level": "city"
+  },
+  {
+    "name": "Toronto",
+    "country": "Canada",
+    "lat": 43.664645,
+    "lng": -79.389459,
+    "level": "city"
+  },
+  {
+    "name": "Jakarta",
+    "country": "Indonesia",
+    "lat": -6.172472,
+    "lng": 106.827492,
+    "level": "city"
+  },
+  {
+    "name": "Seoul",
+    "country": "South Korea",
+    "lat": 37.568295,
+    "lng": 126.997785,
+    "level": "city"
+  },
+  {
+    "name": "Cape Town",
+    "country": "South Africa",
+    "lat": -33.918065,
+    "lng": 18.433042,
+    "level": "city"
+  },
+  {
+    "name": "Istanbul",
+    "country": "Turkey",
+    "lat": 41.017602,
+    "lng": 28.974277,
+    "level": "city"
+  }
+]

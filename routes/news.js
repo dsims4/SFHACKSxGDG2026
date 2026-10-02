@@ -7,6 +7,31 @@ function validID(value) {
 function createNewsRouter(database) {
     const router = express.Router();
     router.use((req, res, next) => database ? next() : res.status(503).json({ error: "Database is not configured." }));
+    router.get("/globe", async (req, res) => {
+        const hours = req.query.hours === undefined ? "48" : req.query.hours;
+        if (typeof hours !== "string" || !["24", "48"].includes(hours)) {
+            return res.status(400).json({ error: "hours must be 24 or 48." });
+        }
+        // Count each article once, preserving its complete set of labels. Expanding
+        // topics here would double-count multi-label articles in the all-topics view.
+        const end = new Date();
+        const start = new Date(end.getTime() - Number(hours) * 3600000);
+        const result = await database.query(`
+            SELECT location_name AS name, location_country AS country,
+                location_level AS level, location_lat AS lat, location_lng AS lng,
+                topics, COUNT(*)::integer AS count
+            FROM entries
+            WHERE has_location = TRUE AND cardinality(topics) > 0
+                AND location_lat BETWEEN -90 AND 90
+                AND location_lng BETWEEN -180 AND 180
+                AND publication_date >= $1 AND publication_date <= $2
+            GROUP BY location_name, location_country, location_level,
+                location_lat, location_lng, topics
+            ORDER BY count DESC, location_name, topics
+        `, [start.toISOString(), end.toISOString()]);
+        res.set("Cache-Control", "public, max-age=60");
+        return res.json({ mode: "live", start: start.toISOString(), end: end.toISOString(), locations: result.rows });
+    });
     router.get(["/feed", "/topics"], async (req, res) => {
         const date = req.query.date || new Date().toISOString().slice(0, 10);
         if (typeof date !== "string" || !/^\d{4}-\d{2}-\d{2}$/.test(date) ||

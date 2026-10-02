@@ -31,6 +31,51 @@ Open http://localhost:3000. For automatic server restarts when files change:
 npm run dev
 ```
 
+## Homepage story globe
+
+The homepage includes a Three.js globe with bundled Natural Earth geography,
+drawn into a canvas texture using D3 and `topojson-client`. There are no Google
+Maps, Google Earth, geocoding, tile, or CDN requests and no map API key is needed.
+
+- Drag or use arrow keys to rotate; scroll, pinch, or use the buttons to zoom.
+- Filter by topic and the past 24 or 48 hours. Switch between a heatmap and columns.
+- Choose a hotspot or a location to center the globe and inspect its topic counts.
+- The same locations remain accessible as a list when WebGL is unavailable.
+
+`GET /api/globe?hours=48` aggregates labeled, geolocated `entries` within the requested
+window (only `24` and `48` are accepted). Multi-label articles count once in the
+total. Coordinates come from the existing RSS location inference; a place mentioned
+in an article is not necessarily its event site. The map excludes unlocated and
+unlabeled articles and preserves country-level labels. Heat colors show relative
+concentration within the current selection; column heights scale linearly with counts.
+
+When the API is unavailable, the globe displays a clearly labeled illustrative demo
+with 22 Natural Earth cities. A successful but empty live feed remains empty. Use
+the data source selector or retry button to switch back to latest stories. Demo
+counts and topic assignments are synthetic. Topic briefings below the globe always
+come from the database.
+
+The browser bundle is committed so the existing production Docker build works
+without installing development dependencies. After editing `client/`, rebuild it:
+
+```bash
+npm run build:globe
+npm test
+```
+
+With the app running and Google Chrome installed, run the browser checks:
+
+```bash
+npm run test:globe
+# Optional: GLOBE_TEST_URL=http://localhost:3031 CHROME_PATH=/path/to/chrome npm run test:globe
+```
+
+Browser checks use local story fixtures, verify desktop/mobile interactions,
+offline/empty feeds and the WebGL fallback, and assert zero external requests.
+Screenshots are written to the system temporary directory. Source attribution is
+in `client/data/README.md`; bundled library licenses are in
+`public/js/globe.LICENSES.txt`.
+
 ## Project structure
 
 - `server.js`: Express, Nunjucks, security headers, static files, and error handling.
@@ -38,6 +83,9 @@ npm run dev
 - `views/`: page templates, shared layout, and head partial.
 - `public/css/`: shared styles and index-page layout.
 - `public/js/app.js`: shared browser API-response helper.
+- `client/globe.mjs`: interactive homepage globe and story filters.
+- `client/globe-data.mjs`: location aggregation and spherical heatmap math.
+- `scripts/build-globe.js`: rebuild the self-contained browser bundle.
 - `rss-builder/`: JavaScript RSS worker, feed list, geographic hints, and SQL schema.
 - `services/db.js`: shared PostgreSQL pool, Cloud SQL settings, and schema initialization.
 - `services/article-summaries.js`: article JSON, summary prompts, model response validation, and summary storage.

@@ -12,9 +12,14 @@ function createPublicRouter(database) {
     const router = express.Router();
     router.get("/", async (req, res) => {
         if (!database) return res.status(503).render("index.njk", { topics: [], message: "News is temporarily unavailable." });
-        const result = await database.query(`SELECT id::text, topic, date::text, summary
-            FROM topic_summaries WHERE date BETWEEN (NOW() AT TIME ZONE 'UTC')::date - 1 AND (NOW() AT TIME ZONE 'UTC')::date ORDER BY date DESC, topic`);
-        return res.render("index.njk", { currentPage: "index", topics: result.rows });
+        try {
+            const result = await database.query(`SELECT id::text, topic, date::text, summary
+                FROM topic_summaries WHERE date BETWEEN (NOW() AT TIME ZONE 'UTC')::date - 1 AND (NOW() AT TIME ZONE 'UTC')::date ORDER BY date DESC, topic`);
+            return res.render("index.njk", { currentPage: "index", topics: result.rows });
+        } catch (error) {
+            console.error("Homepage topics unavailable:", error.message);
+            return res.status(503).render("index.njk", { topics: [], message: "News is temporarily unavailable. Please try again shortly." });
+        }
     });
     router.get("/topic/:id", async (req, res) => {
         if (!validID(req.params.id)) return res.status(400).send("Invalid topic ID.");
