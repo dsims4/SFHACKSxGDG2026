@@ -27,6 +27,8 @@ ALTER TABLE entries ADD COLUMN IF NOT EXISTS has_location BOOLEAN DEFAULT FALSE;
 
 ALTER TABLE entries ADD COLUMN IF NOT EXISTS images JSONB NOT NULL DEFAULT '[]';
 
+ALTER TABLE entries ADD COLUMN IF NOT EXISTS item_xml TEXT;
+
 CREATE INDEX IF NOT EXISTS idx_entries_publication_date ON entries (publication_date DESC);
 
 CREATE INDEX IF NOT EXISTS idx_entries_source ON entries (source);

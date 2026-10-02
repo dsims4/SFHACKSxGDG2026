@@ -84,6 +84,95 @@ function getContent(entry) {
     return entry.summary || entry.content || entry.description || entry["content:encoded"] || "";
 }
 
+// Outermost <item> or <entry> elements, skipping CDATA and comments so markup
+// inside a description cannot split the real item.
+function extractElements(xml, localTag) {
+    const segments = [];
+    const wanted = localTag.toLowerCase();
+    let depth = 0;
+    let start = -1;
+    let index = 0;
+
+    while (index < xml.length) {
+        if (xml.startsWith("<![CDATA[", index)) {
+            const end = xml.indexOf("]]>", index + 9);
+            index = end === -1 ? xml.length : end + 3;
+            continue;
+        }
+        if (xml.startsWith("<!--", index)) {
+            const end = xml.indexOf("-->", index + 4);
+            index = end === -1 ? xml.length : end + 3;
+            continue;
+        }
+        if (xml[index] !== "<") {
+            index++;
+            continue;
+        }
+
+        const closing = xml[index + 1] === "/";
+        const nameStart = closing ? index + 2 : index + 1;
+        let nameEnd = nameStart;
+        while (nameEnd < xml.length && /[A-Za-z0-9:_.-]/.test(xml[nameEnd])) nameEnd++;
+        const rawName = xml.slice(nameStart, nameEnd);
+        const local = rawName.slice(rawName.lastIndexOf(":") + 1).toLowerCase();
+        const tagEnd = xml.indexOf(">", index);
+        if (tagEnd === -1) break;
+
+        if (rawName && local === wanted) {
+            const selfClosing = !closing && xml[tagEnd - 1] === "/";
+            if (closing) {
+                if (depth > 0) depth -= 1;
+                if (depth === 0 && start !== -1) {
+                    segments.push(xml.slice(start, tagEnd + 1));
+                    start = -1;
+                }
+            } else if (selfClosing) {
+                if (depth === 0) segments.push(xml.slice(index, tagEnd + 1));
+            } else {
+                if (depth === 0) start = index;
+                depth += 1;
+            }
+        }
+
+        index = tagEnd + 1;
+    }
+
+    return segments;
+}
+
+function pickSegments(itemSegments, entrySegments, count) {
+    if (itemSegments.length === count) return itemSegments;
+    if (entrySegments.length === count) return entrySegments;
+    const itemDistance = Math.abs(itemSegments.length - count);
+    const entryDistance = Math.abs(entrySegments.length - count);
+    if (entrySegments.length && entryDistance < itemDistance) return entrySegments;
+    return itemSegments.length ? itemSegments : entrySegments;
+}
+
+function itemXmlList(xml, items) {
+    const segments = pickSegments(
+        extractElements(xml, "item"),
+        extractElements(xml, "entry"),
+        items.length
+    );
+    if (segments.length === items.length) return segments;
+
+    const used = new Set();
+    return items.map((item) => {
+        const needles = [item.link, item.guid, item.id]
+            .map((value) => (typeof value === "string" ? value.trim() : ""))
+            .filter(Boolean);
+        for (const needle of needles) {
+            const found = segments.findIndex((segment, index) => !used.has(index) && segment.includes(needle));
+            if (found !== -1) {
+                used.add(found);
+                return segments[found];
+            }
+        }
+        return null;
+    });
+}
+
 function imageList(value) {
     if (!value) return [];
     return Array.isArray(value) ? value : [value];
@@ -261,10 +350,12 @@ async function fetchSingleFeed(feed, { signal, now = new Date() } = {}) {
                 ]
             }
         });
-        const parsed = await parser.parseString(await response.text());
+        const rawXml = await response.text();
+        const parsed = await parser.parseString(rawXml);
+        const xmlSegments = itemXmlList(rawXml, parsed.items || []);
         const entries = [];
 
-        for (const entry of parsed.items) {
+        for (const [index, entry] of (parsed.items || []).entries()) {
             let title = (entry.title || "").trim();
             const content = getContent(entry).trim();
             if (shouldSkip(name, title, content)) continue;
@@ -285,7 +376,8 @@ async function fetchSingleFeed(feed, { signal, now = new Date() } = {}) {
                 publication_date: date,
                 link,
                 ...extractLocation(title, content),
-                images: extractImages(entry)
+                images: extractImages(entry),
+                item_xml: xmlSegments[index] || null
             });
         }
 
@@ -454,6 +546,7 @@ function storiesForInsert(stories) {
             if (!image?.url || previous.images.some((existing) => existing.url === image.url)) continue;
             previous.images.push(image);
         }
+        if (!previous.item_xml && story.item_xml) previous.item_xml = story.item_xml;
     }
 
     return unique;
@@ -474,13 +567,14 @@ async function insertStories(database, stories) {
                     story.link, story.location_name, story.location_level,
                     story.location_country, story.lat, story.lng,
                     story.country_lat, story.country_lng, story.has_location,
-                    JSON.stringify(story.images || [])
+                    JSON.stringify(story.images || []),
+                    story.item_xml || null
                 ];
                 const placeholders = row.map((value) => {
                     values.push(value);
                     return `$${values.length}`;
                 });
-                placeholders[placeholders.length - 1] += "::jsonb";
+                placeholders[placeholders.length - 2] += "::jsonb";
                 return `(${placeholders.join(", ")})`;
             });
 
@@ -489,9 +583,11 @@ async function insertStories(database, stories) {
                     title, content, source, publication_date, link,
                     location_name, location_level, location_country,
                     location_lat, location_lng, country_lat, country_lng, has_location,
-                    images
+                    images, item_xml
                 ) VALUES ${rows.join(", ")}
-                ON CONFLICT (source, link) DO UPDATE SET images = EXCLUDED.images
+                ON CONFLICT (source, link) DO UPDATE SET
+                    images = EXCLUDED.images,
+                    item_xml = COALESCE(EXCLUDED.item_xml, entries.item_xml)
             `, values);
         }
         await client.query("COMMIT");

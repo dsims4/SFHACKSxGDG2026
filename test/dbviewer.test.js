@@ -71,7 +71,12 @@ test("searchEntries pages stories and drops unsafe links", async () => {
                     link: "javascript:alert(1)",
                     location_name: "Paris",
                     location_country: "France",
-                    has_location: false
+                    has_location: false,
+                    images: [
+                        { url: "https://cdn.example/a.jpg", mime: "image/jpeg", source: "enclosure" },
+                        { url: "javascript:alert(1)" }
+                    ],
+                    item_xml: "<item><title>Paris</title></item>"
                 }]
             };
         }
@@ -84,6 +89,8 @@ test("searchEntries pages stories and drops unsafe links", async () => {
         perPage: "10"
     });
 
+    assert.match(calls[1].sql, /item_xml/);
+    assert.match(calls[1].sql, /images/);
     assert.match(calls[1].sql, /ORDER BY id DESC/);
     assert.deepEqual(calls[1].params, ["paris", 10, 10]);
     assert.equal(result.total, 30);
@@ -94,6 +101,8 @@ test("searchEntries pages stories and drops unsafe links", async () => {
     assert.equal(result.rows[0].location, "Paris — France");
     assert.equal(result.rows[0].published, "2026-03-01 12:00:00Z");
     assert.equal(result.rows[0].hasLocation, false);
+    assert.deepEqual(result.rows[0].images, ["https://cdn.example/a.jpg"]);
+    assert.equal(result.rows[0].itemXml, "<item><title>Paris</title></item>");
     assert.equal(result.nextHref, "/dbviewer?q=paris&sort=id_desc&perPage=10&page=3");
 });
 

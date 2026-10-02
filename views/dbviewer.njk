@@ -78,6 +78,8 @@
                         <th>Content</th>
                         <th>Location</th>
                         <th>Link</th>
+                        <th>XML</th>
+                        <th>Images</th>
                     </tr>
                 </thead>
                 <tbody>
@@ -102,10 +104,30 @@
                                     —
                                 {% endif %}
                             </td>
+                            <td>
+                                {% if row.itemXml %}
+                                    <div class="cell-content cell-xml" id="x{{ row.id }}">{{ row.itemXml }}</div>
+                                    <button class="toggle-more" type="button" data-for="x{{ row.id }}">more</button>
+                                {% else %}
+                                    —
+                                {% endif %}
+                            </td>
+                            <td>
+                                {% if row.images.length %}
+                                    <div class="cell-content image-list" id="i{{ row.id }}">
+                                        {% for image in row.images %}
+                                            <a class="row-link" href="{{ image }}" target="_blank" rel="noopener noreferrer">{{ image }}</a>
+                                        {% endfor %}
+                                    </div>
+                                    <button class="toggle-more" type="button" data-for="i{{ row.id }}">more</button>
+                                {% else %}
+                                    —
+                                {% endif %}
+                            </td>
                         </tr>
                     {% else %}
                         <tr>
-                            <td colspan="7">No rows matched.</td>
+                            <td colspan="9">No rows matched.</td>
                         </tr>
                     {% endfor %}
                 </tbody>

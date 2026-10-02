@@ -132,7 +132,7 @@ test("document hashes and timestamp serialization stay compatible with Python", 
 test("RSS parsing handles CDATA, content fallback, dates, Reuters titles, and exclusions", async (t) => {
     const date = "Sun, 01 Mar 2026 12:00:00 GMT";
     const xml = rss([
-        item("Paris &amp; London - Reuters", date, "<p>Summary</p>", "<content:encoded><![CDATA[Full text]]></content:encoded>"),
+        item("Paris &amp; London - Reuters", date, "<p>Summary</p></item>", "<content:encoded><![CDATA[Full text]]></content:encoded>"),
         item("Opinion | Skip", date),
         item("Old story", "Wed, 01 Jan 2025 00:00:00 GMT"),
         item("Future story", "Fri, 01 Jan 2027 00:00:00 GMT"),
@@ -147,10 +147,15 @@ test("RSS parsing handles CDATA, content fallback, dates, Reuters titles, and ex
     assert.equal(result.error, null);
     assert.equal(result.entries.length, 2);
     assert.equal(result.entries[0].title, "Paris & London");
-    assert.equal(result.entries[0].content, "<p>Summary</p>");
+    assert.equal(result.entries[0].content, "<p>Summary</p></item>");
     assert.equal(result.entries[1].content, "Full text");
     assert.equal(result.entries[1].link, null);
     assert.equal(result.entries[1].location_name, "Tokyo");
+    assert.match(result.entries[0].item_xml, /^<item>[\s\S]*<\/item>$/);
+    assert.match(result.entries[0].item_xml, /Paris &amp; London - Reuters/);
+    assert.match(result.entries[0].item_xml, /<!\[CDATA\[<p>Summary<\/p><\/item>\]\]>/);
+    assert.doesNotMatch(result.entries[0].item_xml, /Opinion \| Skip/);
+    assert.match(result.entries[1].item_xml, /<title>Tokyo<\/title>/);
 });
 
 test("Atom summaries, published dates, and updated-only entries are supported", async (t) => {
@@ -170,6 +175,8 @@ test("Atom summaries, published dates, and updated-only entries are supported", 
     assert.equal(result.entries[0].content, "<p>Summary</p>");
     assert.equal(result.entries[0].publication_date.toISOString(), "2026-03-01T12:00:00.000Z");
     assert.equal(result.entries[1].publication_date.toISOString(), "2026-03-01T12:00:00.000Z");
+    assert.match(result.entries[0].item_xml, /<entry>[\s\S]*London news[\s\S]*<\/entry>/);
+    assert.match(result.entries[1].item_xml, /<title>Paris<\/title>/);
 });
 
 test("feed errors are isolated and parallel fetches honor the worker limit", async (t) => {
@@ -203,14 +210,16 @@ test("batched SQL uses parameters, commits all batches, and rolls back failed in
     await insertStories(database, stories);
     const inserts = database.calls.filter((call) => call.sql.includes("INSERT INTO"));
     assert.equal(inserts.length, 2);
-    assert.equal(inserts[0].values.length, 200 * 14);
-    assert.equal(inserts[1].values.length, 14);
+    assert.equal(inserts[0].values.length, 200 * 15);
+    assert.equal(inserts[1].values.length, 15);
     assert.equal(inserts[0].values[0], story.title);
     assert.equal(inserts[0].values[13], JSON.stringify([extra]));
+    assert.equal(inserts[0].values[14], null);
     assert.equal(inserts[1].values[4], "https://example.com/story-200");
     assert.equal(inserts[1].values[13], "[]");
     assert(!inserts[0].sql.includes(story.title));
-    assert.match(inserts[0].sql, /ON CONFLICT \(source, link\) DO UPDATE SET images = EXCLUDED\.images/);
+    assert.match(inserts[0].sql, /item_xml/);
+    assert.match(inserts[0].sql, /ON CONFLICT \(source, link\) DO UPDATE SET\s+images = EXCLUDED\.images,\s+item_xml = COALESCE\(EXCLUDED\.item_xml, entries\.item_xml\)/);
     assert.equal(database.calls.at(-1).sql, "COMMIT");
     assert.equal(database.released, 1);
 

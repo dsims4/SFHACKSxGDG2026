@@ -107,6 +107,25 @@ function safeLink(link) {
     return null;
 }
 
+function imageLinks(value) {
+    let images = value;
+    if (typeof images === "string") {
+        try {
+            images = JSON.parse(images);
+        } catch {
+            return [];
+        }
+    }
+    if (!Array.isArray(images)) return [];
+
+    const links = [];
+    for (const image of images) {
+        const url = safeLink(typeof image === "string" ? image : image?.url);
+        if (url) links.push(url);
+    }
+    return links;
+}
+
 function formatPublished(value) {
     if (!value) return "—";
     const date = value instanceof Date ? value : new Date(value);
@@ -136,7 +155,7 @@ async function searchEntries(pool, query) {
     const page = Math.min(parsed.page, pageCount);
     const rows = await pool.query(`
         SELECT id, title, content, source, publication_date, link,
-               location_name, location_country, has_location
+               location_name, location_country, has_location, images, item_xml
         FROM entries
         WHERE ${where}
         ORDER BY ${SORTS[parsed.sort]}
@@ -158,7 +177,9 @@ async function searchEntries(pool, query) {
             content: row.content || "",
             location: [row.location_name, row.location_country].filter(Boolean).join(" — ") || "—",
             hasLocation: Boolean(row.has_location),
-            link: safeLink(row.link)
+            link: safeLink(row.link),
+            images: imageLinks(row.images),
+            itemXml: row.item_xml || ""
         }))
     };
 }
@@ -220,6 +241,7 @@ module.exports = {
     parseDbViewerQuery,
     buildFilters,
     viewerHref,
+    imageLinks,
     formatPublished,
     listSources,
     searchEntries,

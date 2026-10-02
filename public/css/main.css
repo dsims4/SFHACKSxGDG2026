@@ -259,6 +259,18 @@ body.dbviewer-page {
     max-height: none;
 }
 
+.dbviewer .cell-xml {
+    max-width: 420px;
+    white-space: pre-wrap;
+}
+
+.dbviewer .image-list {
+    display: flex;
+    flex-direction: column;
+    gap: 0.25rem;
+    max-width: 220px;
+}
+
 .dbviewer .row-link {
     color: #dcebff;
     text-decoration: none;
