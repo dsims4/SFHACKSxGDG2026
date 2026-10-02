@@ -172,12 +172,12 @@ function makeMapTexture() {
     context.fillStyle = '#ffffff';
     context.fill();
     context.strokeStyle = '#000000';
-    context.lineWidth = 1.4;
+    context.lineWidth = 2.4;
     context.stroke();
     context.beginPath();
     path(mesh(world, world.objects.countries, (a, b) => a !== b));
     context.strokeStyle = '#000000';
-    context.lineWidth = 1.4;
+    context.lineWidth = 0.9;
     context.stroke();
     const texture = new THREE.CanvasTexture(canvas);
     texture.colorSpace = THREE.SRGBColorSpace;
@@ -216,7 +216,7 @@ function makeGlobe() {
     // Back-facing shell draws a crisp silhouette without covering the map.
     const outline = new THREE.Mesh(sphereGeometry,
         new THREE.MeshBasicMaterial({ color: '#000000', side: THREE.BackSide }));
-    outline.scale.setScalar(1.006);
+    outline.scale.setScalar(1.014);
     scene.add(outline);
     const markers = new THREE.Group();
     const columns = new THREE.Group();

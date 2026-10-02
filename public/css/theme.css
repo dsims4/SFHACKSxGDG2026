@@ -1,0 +1,92 @@
+:root {
+    color-scheme: light;
+    --theme-panel: #f5f5f5;
+    --theme-border: #000;
+    --theme-muted: #555;
+    --theme-link: #000;
+}
+
+:root[data-theme="dark"] {
+    color-scheme: dark;
+    --color-ink: #ececec;
+    --color-surface: #212121;
+    --theme-panel: #2f2f2f;
+    --theme-border: #606060;
+    --theme-muted: #b4b4b4;
+    --theme-link: #c7dfff;
+    --border-strong: 2px solid var(--theme-border);
+}
+
+.theme-toolbar {
+    display: flex;
+    justify-content: flex-end;
+    padding: 0.75rem 1rem;
+    background: var(--color-surface);
+}
+
+#theme-toggle {
+    padding: 0.5rem 0.75rem;
+    border: 1px solid var(--theme-border);
+    border-radius: 0;
+    background: var(--theme-panel);
+    color: var(--color-ink);
+    font: inherit;
+    font-size: 0.85rem;
+    cursor: pointer;
+}
+
+#theme-toggle:focus-visible {
+    outline: 2px solid var(--color-ink);
+    outline-offset: 3px;
+}
+
+html[data-theme="dark"] .news-home {
+    --line: var(--theme-border);
+    --muted: var(--theme-muted);
+    --mint: var(--color-ink);
+}
+
+html[data-theme="dark"] .news-home select {
+    color-scheme: dark;
+}
+
+html[data-theme="dark"] :is(.news-card, .topic-general-summary, .globe-card, .globe-toolbar, .globe-sidebar, .globe-controls, .topic-filter, .briefing-empty, .location-tags span, .article-more, .news-home select) {
+    background: var(--theme-panel);
+    border-color: var(--theme-border);
+}
+
+html[data-theme="dark"] :is(.news-card-header, .news-card-title, .news-card-summary, .topic-general-summary h2, .briefing-card h3, .briefing-card ul, .article-images, .topic-tag, .topic-filter summary, .topic-filter-actions, .location-topic-title) {
+    border-color: var(--theme-border);
+}
+
+html[data-theme="dark"] :is(.news-card-meta, .briefing-date, .article-topics) {
+    color: var(--theme-muted);
+}
+
+html[data-theme="dark"] .viewer th {
+    background: var(--theme-panel);
+}
+
+html[data-theme="dark"] :is(.viewer input, .viewer select) {
+    color: var(--color-ink);
+    background: var(--theme-panel);
+}
+
+html[data-theme="dark"] body.dbviewer-page {
+    background: var(--color-surface);
+    color: var(--color-ink);
+}
+
+html[data-theme="dark"] .dbviewer :is(.filters, input, select, button, .reset, .viewer-message, .table-wrap, th) {
+    color: var(--color-ink);
+    background: var(--theme-panel);
+    border-color: var(--theme-border);
+}
+
+html[data-theme="dark"] .dbviewer :is(label, .sub, .meta, .muted) {
+    color: var(--theme-muted);
+}
+
+html[data-theme="dark"] .dbviewer a {
+    color: var(--theme-link);
+}

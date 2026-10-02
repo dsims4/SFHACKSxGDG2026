@@ -4,11 +4,13 @@
         {% include "partials/head.njk" %}
 
         {% block scripts %}{% endblock %}
+        <link rel="stylesheet" href="/css/theme.css">
 
         <title>{% block title %}SFHACKSxGDG2026{% endblock %}</title>
     </head>
 
     <body class="{% block body_class %}{% endblock %}">
+        <div class="theme-toolbar"><button id="theme-toggle" type="button" aria-label="Switch to dark theme">Dark theme</button></div>
         <main>
             {% block content %}{% endblock %}
         </main>
