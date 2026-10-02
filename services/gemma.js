@@ -29,7 +29,7 @@ function readGemmaConfig(env = process.env) {
 function createGemmaGenerator(config, fetchImplementation = fetch) {
     if (!config) throw new Error("Set GEMMA_URL before requesting summaries.");
 
-    return async function generateText(prompt, { model = config.model, signal } = {}) {
+    return async function generateText(prompt, { model = config.model, signal, schema } = {}) {
         if (typeof prompt !== "string" || !prompt.trim()) throw new Error("A nonempty prompt is required.");
         const timeout = AbortSignal.timeout(config.timeoutMs);
         const requestSignal = signal ? AbortSignal.any([signal, timeout]) : timeout;
@@ -62,7 +62,7 @@ function createGemmaGenerator(config, fetchImplementation = fetch) {
                 model,
                 messages: [{ role: "user", content: prompt }],
                 temperature: 0.2,
-                max_tokens: 1024,
+                max_tokens: schema ? 4096 : 1024,
                 stream: false,
                 chat_template_kwargs: { enable_thinking: false },
                 response_format: {
@@ -70,7 +70,7 @@ function createGemmaGenerator(config, fetchImplementation = fetch) {
                     json_schema: {
                         name: "article_summary",
                         strict: true,
-                        schema: {
+                        schema: schema || {
                             type: "array", minItems: 5, maxItems: 5,
                             items: { type: "string", minLength: 1 }
                         }
@@ -89,6 +89,7 @@ function createGemmaGenerator(config, fetchImplementation = fetch) {
         }
 
         // vLLM returns message.content; normalize it to our existing { text } contract.
+        if (schema) return { text: choice.message?.content };
         const summary = parseSummaryText(choice.message?.content);
         return { text: JSON.stringify(summary) };
     };

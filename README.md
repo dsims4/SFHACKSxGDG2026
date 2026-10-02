@@ -438,3 +438,36 @@ gcloud run services describe sfhacksxgdg2026-git --project=sfsu-hackathon-2026 \
 ## License
 
 MIT. See [LICENSE](LICENSE).
+
+### News topic backend
+
+Set `GEMMA_URL` to the existing private vLLM Cloud Run API and set
+`SUMMARIES_ENABLED=true` to enable background analysis. No GPU resource is created
+by the application. The existing runtime identity authenticates model requests;
+local development can use `GEMMA_ID_TOKEN`. Startup applies the database schema.
+
+The worker reads `entries.content`, assigns a topic, and saves five strings in
+`article_summaries.summary` (JSONB), plus `topic`. It revisits changed content.
+Daily `topic_summaries` rows hold five subtopic bullets for each topic and UTC
+publication date. `topic_bullet_articles` maps each numbered bullet to supporting
+articles. These are shared tables with rows for each topic, not dynamically
+created SQL tables. Citation IDs must come from the model's supplied sources.
+Validation cannot establish that the model's interpretation is factually correct.
+
+The worker processes 20 pending articles per pass, waits 60 seconds between
+passes, and retries failures. A PostgreSQL advisory lock prevents concurrent
+workers across web instances. Each daily synthesis uses up to the 100 newest
+summarized articles for that topic/date, ordered deterministically; it refreshes
+when this source set changes. Empty article content is skipped. Model deployment
+and enabling the worker remain separate configuration steps.
+
+Frontend read endpoints (no frontend pages are changed):
+
+- `GET /api/topics?date=2026-10-02`: `{date, topics:[{id, topic, date, bullets:[{bullet, text}]}]}`. Defaults to today's UTC date.
+- `GET /api/topics/:id/bullets/:bullet/articles`: topic/date, bullet number/text, and its supporting `articles` array. Bullet numbers are 1–5.
+- `GET /api/articles/:id`: `{id, topic, title, link, images, summary}`. Summary is a JSON array, not a serialized string; topic/summary may be null until analyzed.
+
+Article payloads contain only those six fields (ID supports navigation); raw
+content, XML, database credentials and model prompts are never returned by these
+endpoints. Render model text as text, not HTML, and validate external link/image
+URLs in the frontend. Topic lists are empty until analysis publishes results.

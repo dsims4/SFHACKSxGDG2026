@@ -56,3 +56,26 @@ CREATE TABLE IF NOT EXISTS article_summaries (
         ELSE FALSE END
     )
 );
+
+ALTER TABLE article_summaries ADD COLUMN IF NOT EXISTS topic TEXT CHECK (topic ~ '^[a-z][a-z-]{0,49}$');
+ALTER TABLE article_summaries ADD COLUMN IF NOT EXISTS content_hash TEXT;
+
+CREATE TABLE IF NOT EXISTS topic_summaries (
+    id BIGSERIAL PRIMARY KEY,
+    topic TEXT NOT NULL CHECK (topic ~ '^[a-z][a-z-]{0,49}$'),
+    date DATE NOT NULL,
+    summary JSONB NOT NULL CHECK (jsonb_typeof(summary) = 'array' AND jsonb_array_length(summary) = 5),
+    source_hash TEXT NOT NULL,
+    model TEXT NOT NULL,
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    UNIQUE (topic, date)
+);
+
+CREATE TABLE IF NOT EXISTS topic_bullet_articles (
+    topic_summary_id BIGINT NOT NULL REFERENCES topic_summaries(id) ON DELETE CASCADE,
+    bullet INTEGER NOT NULL CHECK (bullet BETWEEN 1 AND 5),
+    article_id BIGINT NOT NULL REFERENCES entries(id) ON DELETE CASCADE,
+    PRIMARY KEY (topic_summary_id, bullet, article_id)
+);
+CREATE INDEX IF NOT EXISTS idx_topic_summaries_date ON topic_summaries(date DESC);
+CREATE INDEX IF NOT EXISTS idx_article_summaries_topic ON article_summaries(topic);
