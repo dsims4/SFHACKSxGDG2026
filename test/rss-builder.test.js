@@ -4,7 +4,7 @@ const path = require("node:path");
 const { setTimeout: sleep } = require("node:timers/promises");
 const {
     readConfig, parseDate, inCurrentYearWindow, getContent, shouldSkip,
-    extractLocation, storyID, buildDoc, fetchSingleFeed, fetchFeeds,
+    extractImages, extractLocation, storyID, buildDoc, fetchSingleFeed, fetchFeeds,
     ensureTypesenseCollection, upsertTypesenseDocuments, backfillTypesense,
     insertStories, fetchOnce, startRSSBuilder
 } = require("../rss-builder/rss_builder");
@@ -194,14 +194,23 @@ test("feed errors are isolated and parallel fetches honor the worker limit", asy
 test("batched SQL uses parameters, commits all batches, and rolls back failed inserts", async () => {
     const database = fakeDatabase();
     const story = { ...makeStory(), title: "'); DROP TABLE entries; --" };
-    await insertStories(database, Array.from({ length: 201 }, () => story));
+    const stories = Array.from({ length: 201 }, (_, index) => ({
+        ...story,
+        link: `https://example.com/story-${index}`
+    }));
+    const extra = { url: "https://cdn.example/extra.jpg", mime: null, source: "html" };
+    stories.push({ ...stories[0], images: [extra] });
+    await insertStories(database, stories);
     const inserts = database.calls.filter((call) => call.sql.includes("INSERT INTO"));
     assert.equal(inserts.length, 2);
-    assert.equal(inserts[0].values.length, 200 * 13);
-    assert.equal(inserts[1].values.length, 13);
+    assert.equal(inserts[0].values.length, 200 * 14);
+    assert.equal(inserts[1].values.length, 14);
     assert.equal(inserts[0].values[0], story.title);
+    assert.equal(inserts[0].values[13], JSON.stringify([extra]));
+    assert.equal(inserts[1].values[4], "https://example.com/story-200");
+    assert.equal(inserts[1].values[13], "[]");
     assert(!inserts[0].sql.includes(story.title));
-    assert.match(inserts[0].sql, /ON CONFLICT \(source, link\) DO NOTHING/);
+    assert.match(inserts[0].sql, /ON CONFLICT \(source, link\) DO UPDATE SET images = EXCLUDED\.images/);
     assert.equal(database.calls.at(-1).sql, "COMMIT");
     assert.equal(database.released, 1);
 
@@ -224,12 +233,74 @@ test("Typesense creates missing collections and reports authentication failures"
     });
     await ensureTypesenseCollection(config);
     assert.equal(created.name, "timeline_entries");
-    assert.equal(created.fields.length, 14);
+    assert.equal(created.fields.length, 15);
+    assert.equal(created.fields.at(-1).name, "images");
     assert.equal(created.default_sorting_field, "publication_date");
     t.mock.method(global, "fetch", async (url) => {
         return url.endsWith("/health") ? Response.json({ ok: true }) : new Response("denied", { status: 401 });
     });
     await assert.rejects(ensureTypesenseCollection(config), /401/);
+});
+
+test("Typesense adds the images field when the collection already exists", async (t) => {
+    let patched = null;
+    t.mock.method(global, "fetch", async (url, options) => {
+        if (url.endsWith("/health")) return Response.json({ ok: true });
+        if (options.method === "PATCH") {
+            patched = JSON.parse(options.body);
+            return Response.json({ ok: true });
+        }
+        return Response.json({
+            name: "timeline_entries",
+            fields: [{ name: "title", type: "string" }]
+        });
+    });
+    await ensureTypesenseCollection(config);
+    assert.deepEqual(patched.fields, [{ name: "images", type: "string[]", optional: true }]);
+});
+
+test("image extraction keeps enclosure, media, and html urls and skips non-images", async (t) => {
+    const date = "Sun, 01 Mar 2026 12:00:00 GMT";
+    const xml = `<?xml version="1.0"?><rss version="2.0"
+        xmlns:media="http://search.yahoo.com/mrss/"
+        xmlns:content="http://purl.org/rss/1.0/modules/content/">
+        <channel><title>News</title>
+        <item>
+            <title>Paris photo</title>
+            <link>https://example.com/story</link>
+            <pubDate>${date}</pubDate>
+            <description><![CDATA[<p>Summary</p>]]></description>
+            <enclosure url="https://cdn.example/enc.jpg" type="image/jpeg"/>
+            <enclosure url="https://cdn.example/audio.mp3" type="audio/mpeg"/>
+            <media:content url="https://cdn.example/clip.mp4" medium="video" type="video/mp4"/>
+            <media:content url="https://cdn.example/hero.jpg" medium="image" type="image/jpeg"/>
+            <media:thumbnail url="https://cdn.example/thumb.jpg"/>
+            <media:group>
+                <media:content url="https://cdn.example/group.jpg" medium="image"/>
+            </media:group>
+            <content:encoded><![CDATA[
+                <img src="/inline.png">
+                <img srcset="https://cdn.example/hero.jpg 640w">
+                <img src="data:image/gif;base64,AAAA">
+            ]]></content:encoded>
+        </item>
+        </channel></rss>`;
+    t.mock.method(global, "fetch", async () => new Response(xml));
+    const result = await fetchSingleFeed({ name: "Other", url: "https://news.example" }, {
+        now: new Date("2026-03-02T00:00:00Z")
+    });
+    assert.equal(result.error, null);
+    assert.deepEqual(result.entries[0].images, [
+        { url: "https://cdn.example/enc.jpg", mime: "image/jpeg", source: "enclosure" },
+        { url: "https://cdn.example/hero.jpg", mime: "image/jpeg", source: "media:content" },
+        { url: "https://cdn.example/thumb.jpg", mime: null, source: "media:thumbnail" },
+        { url: "https://cdn.example/group.jpg", mime: null, source: "media:content" },
+        { url: "https://example.com/inline.png", mime: null, source: "html" }
+    ]);
+    assert.deepEqual(extractImages({
+        link: "https://example.com/story",
+        enclosure: { url: "https://cdn.example/audio.mp3", type: "audio/mpeg" }
+    }), []);
 });
 
 test("Typesense checks every NDJSON import result even after HTTP 200", async (t) => {
@@ -255,11 +326,22 @@ test("backfill preserves existing IDs and adds location hints to older rows", as
     });
     const story = makeStory();
     await backfillTypesense({
-        async query() { return { rows: [{ ...story, has_location: false, location_name: null, lat: null }] }; }
+        async query() {
+            return {
+                rows: [{
+                    ...story,
+                    has_location: false,
+                    location_name: null,
+                    lat: null,
+                    images: [{ url: "https://cdn.example/a.jpg", mime: "image/jpeg", source: "enclosure" }]
+                }]
+            };
+        }
     }, config);
     assert.equal(imported.id, story.id);
     assert.equal(imported.location_name, "Paris");
     assert.equal(imported.lat, 48.8566);
+    assert.deepEqual(imported.images, ["https://cdn.example/a.jpg"]);
 });
 
 test("a full poll reads the bundled feeds, commits candidates, and imports them", async (t) => {

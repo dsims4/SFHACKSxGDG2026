@@ -85,6 +85,106 @@ function getContent(entry) {
     return entry.summary || entry.content || entry.description || entry["content:encoded"] || "";
 }
 
+function imageList(value) {
+    if (!value) return [];
+    return Array.isArray(value) ? value : [value];
+}
+
+function mediaAttributes(node) {
+    if (!node || typeof node !== "object") return {};
+    return node.$ && typeof node.$ === "object" ? node.$ : node;
+}
+
+function resolveImageUrl(url, base) {
+    const trimmed = String(url || "").trim();
+    if (!trimmed || /^(?:data|javascript|blob):/i.test(trimmed)) return null;
+
+    try {
+        const resolved = new URL(trimmed, base || undefined);
+        if (!["http:", "https:"].includes(resolved.protocol)) return null;
+        return resolved.href;
+    } catch {
+        return null;
+    }
+}
+
+function isImage(attrs, source) {
+    const type = String(attrs.type || "").toLowerCase();
+    const medium = String(attrs.medium || "").toLowerCase();
+    if (source === "media:thumbnail") return true;
+    if (type.startsWith("audio/") || type.startsWith("video/") || medium === "audio" || medium === "video") {
+        return false;
+    }
+    if (source === "enclosure") return !type || type.startsWith("image/");
+    return !type || type.startsWith("image/") || medium === "image";
+}
+
+function tagAttribute(tag, name) {
+    const match = tag.match(new RegExp(`\\b${name}\\s*=\\s*(?:"([^"]*)"|'([^']*)'|([^\\s"'=<>]+))`, "i"));
+    return match ? (match[1] ?? match[2] ?? match[3] ?? "").trim() : "";
+}
+
+function firstSrcsetUrl(srcset) {
+    return String(srcset || "").split(",")[0].trim().split(/\s+/)[0] || "";
+}
+
+function imageUrls(images) {
+    if (!Array.isArray(images)) return [];
+    return images.flatMap((image) => {
+        const url = typeof image === "string" ? image : image?.url;
+        return url ? [url] : [];
+    });
+}
+
+// Enclosure, Media RSS, and HTML images. Summary text often omits the photo.
+function extractImages(entry) {
+    const images = [];
+    const seen = new Set();
+    const base = entry.link || "";
+
+    function add(url, mime, source) {
+        const resolved = resolveImageUrl(url, base);
+        if (!resolved || seen.has(resolved)) return;
+        seen.add(resolved);
+        const type = String(mime || "").toLowerCase();
+        images.push({
+            url: resolved,
+            mime: type.startsWith("image/") ? type : null,
+            source
+        });
+    }
+
+    function addMedia(nodes, source) {
+        for (const node of imageList(nodes)) {
+            const attrs = mediaAttributes(node);
+            if (node && (node["media:content"] || node["media:thumbnail"]) && !attrs.url) {
+                addMedia(node["media:content"], "media:content");
+                addMedia(node["media:thumbnail"], "media:thumbnail");
+                continue;
+            }
+            if (!isImage(attrs, source)) continue;
+            add(attrs.url || attrs.href, attrs.type, source);
+        }
+    }
+
+    if (entry.enclosure?.url && isImage(entry.enclosure, "enclosure")) {
+        add(entry.enclosure.url, entry.enclosure.type, "enclosure");
+    }
+
+    addMedia(entry["media:content"], "media:content");
+    addMedia(entry["media:thumbnail"], "media:thumbnail");
+    addMedia(entry["media:group"], "media:content");
+
+    const html = [entry.summary, entry.content, entry.description, entry["content:encoded"]]
+        .filter((value) => typeof value === "string" && value)
+        .join("\n");
+    for (const tag of html.match(/<img\b[^>]*>/gi) || []) {
+        add(tagAttribute(tag, "src") || firstSrcsetUrl(tagAttribute(tag, "srcset")), null, "html");
+    }
+
+    return images;
+}
+
 function shouldSkip(source, title, content) {
     if (title.includes("Opinion | ")) return true;
     if (source === "CNET" && (title.includes("Today's ") || content.includes("Today's "))) {
@@ -126,7 +226,8 @@ function buildDoc(story) {
         link: story.link || "",
         publication_date: Math.trunc(story.publication_date.getTime() / 1000),
         publication_date_iso: story.publication_date.toISOString().replace(".000Z", "+00:00"),
-        has_location: Boolean(story.has_location)
+        has_location: Boolean(story.has_location),
+        images: imageUrls(story.images)
     };
 }
 
@@ -150,7 +251,17 @@ async function fetchSingleFeed(feed, { signal, now = new Date() } = {}) {
         if (!response.ok) throw new Error(`HTTP ${response.status}`);
 
         const Parser = require("rss-parser");
-        const parser = new Parser({ customFields: { item: ["published", "updated"] } });
+        const parser = new Parser({
+            customFields: {
+                item: [
+                    "published",
+                    "updated",
+                    ["media:content", "media:content", { keepArray: true }],
+                    ["media:thumbnail", "media:thumbnail", { keepArray: true }],
+                    ["media:group", "media:group", { keepArray: true }]
+                ]
+            }
+        });
         const parsed = await parser.parseString(await response.text());
         const entries = [];
 
@@ -174,7 +285,8 @@ async function fetchSingleFeed(feed, { signal, now = new Date() } = {}) {
                 source: name,
                 publication_date: date,
                 link,
-                ...extractLocation(title, content)
+                ...extractLocation(title, content),
+                images: extractImages(entry)
             });
         }
 
@@ -222,7 +334,23 @@ async function ensureTypesenseCollection(config, signal) {
     const collection = `/collections/${encodeURIComponent(config.typesenseCollection)}`;
     const existing = await typesenseRequest(config, collection, {}, signal);
     const existingBody = await existing.text();
-    if (existing.status === 200) return;
+    if (existing.status === 200) {
+        const current = JSON.parse(existingBody);
+        if ((current.fields || []).some((field) => field.name === "images")) return;
+
+        const patched = await typesenseRequest(config, collection, {
+            method: "PATCH",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+                fields: [{ name: "images", type: "string[]", optional: true }]
+            })
+        }, signal);
+        const patchBody = await patched.text();
+        if (!patched.ok) {
+            throw new Error(`Typesense images field update failed: ${patched.status} ${patchBody}`);
+        }
+        return;
+    }
     if (existing.status !== 404) {
         throw new Error(`Typesense collection check failed: ${existing.status} ${existingBody}`);
     }
@@ -243,7 +371,8 @@ async function ensureTypesenseCollection(config, signal) {
             { name: "lng", type: "float", optional: true },
             { name: "country_lat", type: "float", optional: true },
             { name: "country_lng", type: "float", optional: true },
-            { name: "has_location", type: "bool", facet: true }
+            { name: "has_location", type: "bool", facet: true },
+            { name: "images", type: "string[]", optional: true }
         ],
         default_sorting_field: "publication_date"
     };
@@ -286,7 +415,7 @@ async function backfillTypesense(database, config, signal) {
         SELECT title, content, source, publication_date, link,
                location_name, location_level, location_country,
                location_lat AS lat, location_lng AS lng,
-               country_lat, country_lng, has_location
+               country_lat, country_lng, has_location, images
         FROM entries
         WHERE publication_date >= (
             date_trunc('year', NOW() AT TIME ZONE 'UTC') AT TIME ZONE 'UTC'
@@ -303,25 +432,56 @@ async function backfillTypesense(database, config, signal) {
     if (stories.length) console.log(`Backfilled ${stories.length} stories into Typesense`);
 }
 
+function storiesForInsert(stories) {
+    const byKey = new Map();
+    const unique = [];
+
+    for (const story of stories) {
+        if (!story.link) {
+            unique.push(story);
+            continue;
+        }
+
+        const key = `${story.source}\0${story.link}`;
+        const previous = byKey.get(key);
+        if (!previous) {
+            if (!story.images) story.images = [];
+            byKey.set(key, story);
+            unique.push(story);
+            continue;
+        }
+
+        for (const image of story.images || []) {
+            if (!image?.url || previous.images.some((existing) => existing.url === image.url)) continue;
+            previous.images.push(image);
+        }
+    }
+
+    return unique;
+}
+
 async function insertStories(database, stories) {
-    if (!stories.length) return;
+    const unique = storiesForInsert(stories);
+    if (!unique.length) return;
     const client = await database.connect();
 
     try {
         await client.query("BEGIN");
-        for (let offset = 0; offset < stories.length; offset += 200) {
+        for (let offset = 0; offset < unique.length; offset += 200) {
             const values = [];
-            const rows = stories.slice(offset, offset + 200).map((story) => {
+            const rows = unique.slice(offset, offset + 200).map((story) => {
                 const row = [
                     story.title, story.content, story.source, story.publication_date,
                     story.link, story.location_name, story.location_level,
                     story.location_country, story.lat, story.lng,
-                    story.country_lat, story.country_lng, story.has_location
+                    story.country_lat, story.country_lng, story.has_location,
+                    JSON.stringify(story.images || [])
                 ];
                 const placeholders = row.map((value) => {
                     values.push(value);
                     return `$${values.length}`;
                 });
+                placeholders[placeholders.length - 1] += "::jsonb";
                 return `(${placeholders.join(", ")})`;
             });
 
@@ -329,9 +489,10 @@ async function insertStories(database, stories) {
                 INSERT INTO entries (
                     title, content, source, publication_date, link,
                     location_name, location_level, location_country,
-                    location_lat, location_lng, country_lat, country_lng, has_location
+                    location_lat, location_lng, country_lat, country_lng, has_location,
+                    images
                 ) VALUES ${rows.join(", ")}
-                ON CONFLICT (source, link) DO NOTHING
+                ON CONFLICT (source, link) DO UPDATE SET images = EXCLUDED.images
             `, values);
         }
         await client.query("COMMIT");
@@ -427,6 +588,7 @@ module.exports = {
     inCurrentYearWindow,
     getContent,
     shouldSkip,
+    extractImages,
     extractLocation,
     storyID,
     buildDoc,
