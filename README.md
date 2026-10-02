@@ -182,10 +182,10 @@ starting the server:
 npm run db:init
 ```
 
-The worker reads `rss-builder/feeds.json`, polls every 600 seconds, and fetches up
-to 10 feeds concurrently. It applies today's UTC publication-date filtering,
+The worker reads `rss-builder/feeds.json`, polls every 3600 seconds, and fetches up
+to 10 feeds concurrently. It applies today-and-yesterday UTC publication-date filtering,
 source exclusions, location hints, PostgreSQL table, and Typesense document IDs.
-When Typesense is configured, today’s database rows are indexed after the
+When Typesense is configured, today’s and yesterday’s database rows are indexed after the
 first poll. Stories are saved to PostgreSQL before indexing. A search outage does
 not stop later database writes; indexing retries with a database backfill to repair
 missed imports.
@@ -227,7 +227,7 @@ npm test
 
 Schema initialization creates `article_summaries` alongside `entries`. Each row
 has its own ID, a unique `article_id` referencing `entries.id`, a `summary` JSONB
-array of exactly five nonempty strings, a model identifier, and creation/update
+array of zero to five nonempty strings, a model identifier, and creation/update
 timestamps. Deleting an article deletes its summary. Saving another summary for
 the same article updates the existing row. The usual app startup or `npm run db:init`
 applies this schema to a configured database.
@@ -238,10 +238,10 @@ applies this schema to a configured database.
   `content`. IDs remain strings to preserve PostgreSQL bigint precision. The RSS
   parser has already extracted `entries.content`; the helper preserves plain text
   and any HTML/XML markup inside that JSON string, without parsing another XML tree.
-- `buildSummaryPrompt(article)` includes that payload and requests exactly five
+- `buildSummaryPrompt(article)` includes that payload and requests up to five
   factual bullet strings in a JSON array.
 - `parseSummaryText(text)` parses model output into a JavaScript array, validates
-  five nonempty strings, and rejects prose, wrong types, and double-encoded JSON.
+  up to five strings, removes blank slots, and rejects prose, wrong types, and double-encoded JSON.
 - `saveArticleSummary(pool, { articleId, text, model })` validates the model's text
   and upserts the parsed summary into JSONB using parameterized SQL.
 - `summarizeArticle(pool, articleId, { generateText, model })` reads the article,
@@ -302,7 +302,7 @@ before setting `GEMMA_URL` and `GEMMA_MODEL` on the website. Future application
 deployments preserve these environment settings; normal Git pushes do not rebuild
 or redeploy the GPU service.
 
-The JavaScript adapter requests a five-string JSON schema, disables thinking for
+The JavaScript adapter requests a zero-to-five-string JSON schema, disables thinking for
 summaries, checks for a completed response, and validates the returned array.
 It obtains a short-lived identity token from Google's metadata server when running
 on Cloud Run. vLLM's `choices[0].message.content` is normalized to `{ text }` before
@@ -403,7 +403,7 @@ After verifying `/health`, the setup connects the existing Cloud Run app using
 [Direct VPC egress](https://docs.cloud.google.com/run/docs/configuring/vpc-direct-vpc)
 and `TYPESENSE_URL=http://10.89.0.10:8108`. Only traffic to private addresses uses
 the VPC, so public RSS feeds remain reachable. The worker creates
-`timeline_entries` and backfills today’s PostgreSQL rows on startup.
+`timeline_entries` and backfills today’s and yesterday’s PostgreSQL rows on startup.
 This configures indexing; it does not add a browser search interface.
 
 The disk survives VM restarts and is retained if the VM is deleted. Rerunning the
@@ -487,123 +487,89 @@ gcloud run services describe sfhacksxgdg2026-git --project=sfsu-hackathon-2026 \
 
 MIT. See [LICENSE](LICENSE).
 
-### News topic backend
+## Current pages and news windows
 
-Set `GEMMA_URL` to the existing private vLLM Cloud Run API and set
-`SUMMARIES_ENABLED=true` to enable background analysis. No GPU resource is created
-by the application. The existing runtime identity authenticates model requests;
-local development can use `GEMMA_ID_TOKEN`. Startup applies the database schema.
+- `/`: interactive globe with gray columns, location article cards grouped by
+  topic, and 24/48-hour filters. No heatmap, legend, or sample-data fallback.
+- `/briefing`: today's UTC topic summaries. Politics and Health are selected by
+  default. An expandable, scrollable filter supports multiple topics; Show all
+  topics removes the filter. Cards preview at most three bullets.
+- `/topic/:id`: today's complete topic summary (zero to five bullets) followed by
+  all assigned articles from today, with publisher, UTC publication date, topic
+  labels, summary, and at most three images. Titles link to the original sources.
 
-The worker reads `entries.content`, assigns one or more topics, and saves five strings in
-`article_summaries.summary` (JSONB), plus a legacy primary `topic`. The full category set is stored in `entries.topics` (TEXT[] with a GIN index). It revisits changed content and reclassifies legacy single-topic records.
-Daily `topic_summaries` rows hold five subtopic bullets for each topic and UTC
-publication date. `topic_bullet_articles` maps each numbered bullet to supporting
-articles. These are shared tables with rows for each topic, not dynamically
-created SQL tables. Citation IDs must come from the model's supplied sources.
-Validation cannot establish that the model's interpretation is factually correct.
+The navbar theme preference uses sessionStorage, survives same-tab navigation and
+reloads, and requires no login or cookie. The globe switches to a dark surface and
+white outlines in dark mode; gray columns stay unchanged.
 
-The worker processes 20 pending articles per pass, waits 60 seconds between
-passes, and retries failures. A PostgreSQL advisory lock prevents concurrent
-workers across web instances. Each daily synthesis uses up to the 100 newest
-summarized articles for that topic/date, ordered deterministically; it refreshes
-when this source set changes. Empty article content is skipped. Model deployment
-and enabling the worker remain separate configuration steps.
+RSS collects yesterday at 00:00 UTC through now. It polls hourly
+(`RSS_POLL_SECONDS=3600`), with a database-backed `worker_schedule` claim preventing
+duplicate polls across instances or restarts. Failed/interrupted polls wait for
+the next interval. Keep Cloud Run's minimum instance and always-allocated CPU
+settings enabled for background processing.
 
-Frontend read endpoints (no frontend pages are changed):
+Article inference and Typesense backfill use the two-day ingestion window.
+Topic inference and Daily Briefing use **today only**, from midnight UTC through
+now. Article membership is stored in `entries.topics`, and an article can belong
+to several topics. `article_summaries` stores its JSONB bullet array.
+`topic_summaries` stores one row per topic/date; `topic_bullet_articles` keeps
+per-bullet citations for future subtopic navigation.
 
-- `GET /api/topics?date=2026-10-02`: `{date, topics:[{id, topic, date, bullets:[{bullet, text}]}]}`. Defaults to today's UTC date.
-- `GET /api/topics/:id/bullets/:bullet/articles`: topic/date, bullet number/text, and its supporting `articles` array. Bullet numbers are 1–5.
-- `GET /api/articles/:id`: `{id, topic, topics, title, link, images, summary}`. Summary is a JSON array, not a serialized string; topic/summary may be null until analyzed.
+Gemma returns zero to five factual bullets, omitting unsupported slots instead of
+padding with missing-information messages. The server validates JSON and citation
+IDs before saving. It processes up to 20 pending articles per pass, synthesizes
+from up to 100 current-day articles per topic, then waits 60 seconds. A PostgreSQL
+advisory lock prevents simultaneous summary workers. Failures retry automatically.
 
-Article payloads contain only those seven fields (ID supports navigation); raw
-content, XML, database credentials and model prompts are never returned by these
-endpoints. Render model text as text, not HTML, and validate external link/image
-URLs in the frontend. Topic lists are empty until analysis publishes results.
+Startup preserves today's topic links but clears obsolete mixed-day summary text.
+Those pages remain accessible with empty bullets while current-day summaries
+regenerate. Existing classified articles also seed pending topic rows. A topic
+without classified articles may not appear yet; no news is fabricated to fill it.
 
-### Page API contracts
+## Frontend API
 
-- **Main feed — `GET /api/feed?date=YYYY-MM-DD`** returns
-  `{date, cards:[{id, topic, date, events:[{event:1, text:"..."}, ...]}]}`.
-  Each card has exactly five events. Date defaults to today in UTC; a date with
-  no published summaries returns an empty cards array.
-- **Topic page — `GET /api/topics/:id`** returns
-  `{id, topic, date, summary:[five strings], events:[{event, text}], selected_event:null, articles:[...]}`.
-  The ID is the daily topic summary ID from a feed card. Articles are distinct, assigned to that topic on its UTC publication date, and
-  ordered newest first (ID breaks ties). All matching articles are returned.
-  Add `?event=1` (1–5) to show only articles cited by the clicked event;
-  `selected_event` then contains that number. The full topic summary stays available.
-- **Article page — `GET /api/articles/:id`** returns
-  `{id, topic, title, link, images, summary:[five strings]}`. This is the article's
-  own summary, not the aggregate topic summary. Articles not yet analyzed have
-  null topic/summary. Images retain the RSS builder's stored JSON representation.
+- `GET /api/feed`: today's topic cards and their available events.
+- `GET /api/topics`: today's topics with numbered bullets.
+- `GET /api/topics/:id`: today's topic summary and all assigned current-day articles;
+  optional `?event=1` through `5` narrows articles to a stored citation group.
+- `GET /api/topics/:id/bullets/:bullet/articles`: supporting articles for that bullet.
+- `GET /api/articles/:id`: stored article details.
+- `GET /api/globe?hours=24` (or `48`): aggregated location counts and topic labels.
+- `GET /api/globe/articles`: location-specific articles, filtered by `name`,
+  `country`, `level`, `lat`, `lng`, `topic`, and `hours`, with optional `offset`.
+  Returns up to 50 articles and `next_offset` for pagination.
 
-All nested article objects use the same seven fields as the article page. IDs are
-strings to preserve PostgreSQL bigint precision. Invalid IDs, dates, or event
-numbers return 400; missing topic/article IDs return 404; an unconfigured database
-returns 503. Existing `/api/topics` and bullet-specific citation routes remain
-available for compatibility. Reading these endpoints does not invoke the model.
+Article responses include `id`, `topic` (legacy primary category), `topics`,
+`title`, `publisher`, `publication_date`, `link`, `images` (maximum three), and
+`summary`. IDs are strings. Unanalyzed summaries may be null; analyzed summaries
+can be empty arrays. Raw content, XML and credentials are not returned.
 
+## Check summarization progress
 
-### Two-level prototype
+In Cloud Shell, read the backend logs:
 
-The homepage `/` displays topics from today’s UTC publication date.
-Clicking a topic opens `/topic/:id`, with its five plain-text summary bullets and
-all articles assigned to that topic/date. Each article card displays its summary,
-topic labels, and available images; the title links directly to the original
-publisher. There is no subtopic or internal story navigation in this prototype.
-Empty results show a preparation message rather than sample news.
+```bash
+gcloud run services logs read sfhacksxgdg2026-git \
+  --project=sfsu-hackathon-2026 \
+  --region=us-west2 \
+  --limit=100
+```
 
-Startup backfills `entries.topics` from existing primary classifications without
-replacing existing category sets. The analysis worker progressively reclassifies
-older records using `classification_version = 2`; summary and membership changes
-are saved atomically. An article can appear under multiple daily topics.
-`topic_bullet_articles` continues to hold the individual bullet-to-article foreign
-key references. Topic-level membership is resolved from `entries.topics` and the
-publication date, independently of whether an article was cited in a bullet.
-The legacy `topic` API field is retained as the first category; use `topics` for
-the full set. No additional subtopic summarization calls or pages are introduced.
+Look for `News summary worker enabled.` and `Saved N topic bullets for TOPIC/DATE.`.
+`Article analysis failed`, `Topic analysis failed`, or `News analysis will retry`
+indicate errors. Logs show completed topic writes, not an overall percentage.
+A topic with zero saved bullets means no supported bullets were generated.
 
+For inference errors, read the separate model service's logs:
 
-RSS ingestion, Typesense backfill, article inference (including the manual
-`summarize` command), and daily topic inference are restricted to today's UTC
-publication dates, from 00:00 UTC through now. Yesterday's and older records are
-retained but excluded from new inference. The homepage does not fall back to
-older topics when today's summaries are empty. Existing archived summaries remain
-readable by their explicit IDs/date through the API; reading them never invokes
-Gemma.
+```bash
+gcloud run services logs read gemma-4-31b \
+  --project=sfsu-hackathon-2026 \
+  --region=us-central1 \
+  --limit=100
+```
 
-
-### Current two-day window and hourly RSS schedule
-
-The active window is yesterday at 00:00 UTC through now. RSS ingestion, article
-inference, and search backfill exclude older and future articles. Each current-day
-topic summary combines articles from today and yesterday; new articles refresh
-that daily row. Existing yesterday summary rows remain visible alongside today's
-rows in the feed. Topic article lists exclude anything outside the active window.
-
-RSS defaults to `RSS_POLL_SECONDS=3600`, also set explicitly by `cloudbuild.yaml`.
-A database-backed `worker_schedule` claim allows only one RSS poll per interval
-across instances and restarts. The first poll runs immediately if no recent claim
-exists. Failed or interrupted polls wait until the next interval; the running app
-checks a claimed schedule at most once per minute. Continuous operation requires
-the existing minimum instance and always-allocated CPU deployment settings.
-This replaces the earlier today-only behavior described above.
-
-
-### Partial summaries
-
-Article and topic summaries now contain zero to five populated bullets. When the
-source supports fewer facts, Gemma must omit unused bullets and return `[]` for
-no supported facts, rather than padding with missing-information messages.
-Whitespace-only slots are removed before storage; templates render only populated
-bullets. Startup migrates the database constraints. Active articles are progressively
-regenerated with classification version 3, and topic summaries refresh using a new
-prompt fingerprint so old filler can be replaced. Existing stored summaries are
-not erased while regeneration is pending.
-
-
-Topic pages and Daily Briefing now show only today's UTC summaries and articles.
-Topic synthesis uses only today's sources. Existing two-day summaries are hidden
-until the worker regenerates them (`source_window_days = 1`), avoiding stale
-mixed-day results after deployment. RSS collection and the globe's selectable
-24/48-hour article window are unchanged.
+The worker requires `SUMMARIES_ENABLED=true`, `GEMMA_URL`, and the backend runtime
+service account's Cloud Run Invoker permission on the model service. Updating code
+does not enable a previously disabled worker. Inspect `/api/feed` or `/briefing`
+to check published results after the latest build deploys.
