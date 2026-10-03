@@ -56,14 +56,14 @@ function createNewsRouter(database) {
         return res.json({ mode: "live", start: start.toISOString(), end: end.toISOString(), locations: result.rows });
     });
     router.get(["/feed", "/topics"], async (req, res) => {
-        const date = req.query.date || new Date().toISOString().slice(0, 10);
+        const date = req.query.date || new Intl.DateTimeFormat("en-CA", { timeZone: "America/Los_Angeles", year: "numeric", month: "2-digit", day: "2-digit" }).format(new Date());
         if (typeof date !== "string" || !/^\d{4}-\d{2}-\d{2}$/.test(date) ||
             !Number.isFinite(Date.parse(date)) || new Date(date).toISOString().slice(0, 10) !== date) {
-            return res.status(400).json({ error: "date must be a valid YYYY-MM-DD UTC date." });
+            return res.status(400).json({ error: "date must be a valid YYYY-MM-DD Pacific date." });
         }
         const result = await database.query(`SELECT id::text, topic, date::text, summary
             FROM topic_summaries WHERE date = $1::date AND source_window_days = 1
-                AND date = (NOW() AT TIME ZONE 'UTC')::date
+                AND date = (NOW() AT TIME ZONE 'America/Los_Angeles')::date
             ORDER BY date DESC, topic`, [date]);
         if (req.path === "/feed") {
             return res.json({ date, cards: result.rows.map((row) => ({
@@ -89,8 +89,8 @@ function createNewsRouter(database) {
                     SELECT ${articleFields} FROM entries e
                     JOIN article_summaries s ON s.article_id = e.id
                     WHERE t.topic = ANY(e.topics)
-                        AND (e.publication_date AT TIME ZONE 'UTC')::date = t.date
-                        AND e.publication_date >= (date_trunc('day', NOW() AT TIME ZONE 'UTC') AT TIME ZONE 'UTC') AND e.publication_date <= NOW()
+                        AND (e.publication_date AT TIME ZONE 'America/Los_Angeles')::date = t.date
+                        AND e.publication_date >= (date_trunc('day', NOW() AT TIME ZONE 'America/Los_Angeles') AT TIME ZONE 'America/Los_Angeles') AND e.publication_date <= NOW()
                         AND ($2::integer IS NULL OR EXISTS (
                         SELECT 1 FROM topic_bullet_articles b
                         WHERE b.topic_summary_id = t.id AND b.article_id = e.id
@@ -98,7 +98,7 @@ function createNewsRouter(database) {
                     ))
                     ORDER BY e.publication_date DESC, e.id DESC
                 ) article), '[]'::jsonb) AS articles
-            FROM topic_summaries t WHERE t.id = $1 AND t.source_window_days = 1 AND t.date = (NOW() AT TIME ZONE 'UTC')::date
+            FROM topic_summaries t WHERE t.id = $1 AND t.source_window_days = 1 AND t.date = (NOW() AT TIME ZONE 'America/Los_Angeles')::date
         `, [req.params.id, event === undefined ? null : Number(event)]);
         if (!result.rows.length) return res.status(404).json({ error: "Topic summary not found." });
         const row = result.rows[0];
@@ -119,7 +119,7 @@ function createNewsRouter(database) {
                     JOIN article_summaries s ON s.article_id = e.id
                     WHERE b.topic_summary_id = t.id AND b.bullet = $2::integer ORDER BY e.id
                 ) article), '[]'::jsonb) AS articles
-            FROM topic_summaries t WHERE t.id = $1 AND t.source_window_days = 1 AND t.date = (NOW() AT TIME ZONE 'UTC')::date
+            FROM topic_summaries t WHERE t.id = $1 AND t.source_window_days = 1 AND t.date = (NOW() AT TIME ZONE 'America/Los_Angeles')::date
         `, [req.params.id, req.params.bullet]);
         if (!result.rows.length) return res.status(404).json({ error: "Topic summary not found." });
         return res.json({ ...result.rows[0], bullet: Number(req.params.bullet) });

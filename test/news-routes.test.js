@@ -59,3 +59,19 @@ test("article page returns stored summary and images without model invocation", 
     const result = await request("/articles/:id", { params: { id: "7" }, rows: [row] });
     assert.deepEqual(result.body, row);
 });
+
+test("default feed date changes at Pacific midnight, including daylight saving time", async (t) => {
+    t.mock.timers.enable({ apis: ["Date"], now: new Date("2026-10-03T00:15:00Z") });
+    for (const [instant, expected] of [
+        ["2026-10-03T00:15:00Z", "2026-10-02"],
+        ["2026-10-03T06:59:59Z", "2026-10-02"],
+        ["2026-10-03T07:00:00Z", "2026-10-03"],
+        ["2026-12-03T07:59:59Z", "2026-12-02"],
+        ["2026-12-03T08:00:00Z", "2026-12-03"]
+    ]) {
+        t.mock.timers.setTime(new Date(instant).getTime());
+        const result = await request("/feed");
+        assert.equal(result.body.date, expected);
+        assert.deepEqual(result.calls[0].values, [expected]);
+    }
+});

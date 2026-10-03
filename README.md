@@ -491,7 +491,7 @@ MIT. See [LICENSE](LICENSE).
 
 - `/`: interactive globe with gray columns, location article cards grouped by
   topic, and 24/48-hour filters. No heatmap, legend, or sample-data fallback.
-- `/briefing`: today's UTC topic summaries. Politics and Health are selected by
+- `/briefing`: today's Pacific-time topic summaries. Politics and Health are selected by
   default. An expandable, scrollable filter supports multiple topics; Show all
   topics removes the filter. Cards preview at most three bullets.
 - `/topic/:id`: today's complete topic summary (zero to five bullets) followed by
@@ -509,8 +509,8 @@ the next interval. Keep Cloud Run's minimum instance and always-allocated CPU
 settings enabled for background processing.
 
 Article inference and Typesense backfill use the two-day ingestion window.
-Topic inference and Daily Briefing use **today only**, from midnight UTC through
-now. Article membership is stored in `entries.topics`, and an article can belong
+Topic inference and Daily Briefing use **today only**, from midnight Pacific time (`America/Los_Angeles`) through
+now, including daylight saving time changes. Article membership is stored in `entries.topics`, and an article can belong
 to several topics. `article_summaries` stores its JSONB bullet array.
 `topic_summaries` stores one row per topic/date; `topic_bullet_articles` keeps
 per-bullet citations for future subtopic navigation.

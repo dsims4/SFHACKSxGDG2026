@@ -98,12 +98,12 @@ ALTER TABLE topic_summaries ADD COLUMN IF NOT EXISTS source_window_days INTEGER 
 -- Preserve today's topic navigation while replacing legacy mixed-day summaries.
 DELETE FROM topic_bullet_articles b USING topic_summaries t
 WHERE b.topic_summary_id = t.id AND t.source_window_days <> 1
-    AND t.date = (NOW() AT TIME ZONE 'UTC')::date;
+    AND t.date = (NOW() AT TIME ZONE 'America/Los_Angeles')::date;
 UPDATE topic_summaries SET summary = '[]'::jsonb, source_hash = '', source_window_days = 1
-WHERE source_window_days <> 1 AND date = (NOW() AT TIME ZONE 'UTC')::date;
+WHERE source_window_days <> 1 AND date = (NOW() AT TIME ZONE 'America/Los_Angeles')::date;
 INSERT INTO topic_summaries(topic, date, summary, source_hash, model, source_window_days)
-SELECT DISTINCT topic, (NOW() AT TIME ZONE 'UTC')::date, '[]'::jsonb, '', 'pending', 1
+SELECT DISTINCT topic, (NOW() AT TIME ZONE 'America/Los_Angeles')::date, '[]'::jsonb, '', 'pending', 1
 FROM entries e CROSS JOIN LATERAL unnest(e.topics) membership(topic)
-WHERE e.publication_date >= (date_trunc('day', NOW() AT TIME ZONE 'UTC') AT TIME ZONE 'UTC')
+WHERE e.publication_date >= (date_trunc('day', NOW() AT TIME ZONE 'America/Los_Angeles') AT TIME ZONE 'America/Los_Angeles')
     AND e.publication_date <= NOW()
 ON CONFLICT(topic, date) DO NOTHING;

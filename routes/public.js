@@ -23,7 +23,7 @@ function createPublicRouter(database) {
         if (!database) return res.status(503).render("briefing.njk", { ...context, topics: [], message: "News is temporarily unavailable." });
         try {
             const result = await database.query(`SELECT id::text, topic, date::text, summary
-                FROM topic_summaries WHERE date = (NOW() AT TIME ZONE 'UTC')::date AND source_window_days = 1
+                FROM topic_summaries WHERE date = (NOW() AT TIME ZONE 'America/Los_Angeles')::date AND source_window_days = 1
                     AND (cardinality($1::text[]) = 0 OR topic = ANY($1::text[]))
                 ORDER BY date DESC, topic`, [selectedTopics]);
             return res.render("briefing.njk", { ...context, currentPage: "briefing", topics: result.rows });
@@ -35,13 +35,13 @@ function createPublicRouter(database) {
     router.get("/topic/:id", async (req, res) => {
         if (!validID(req.params.id)) return res.status(400).send("Invalid topic ID.");
         if (!database) return res.status(503).send("News is temporarily unavailable.");
-        const result = await database.query("SELECT id::text, topic, date::text, summary FROM topic_summaries WHERE id = $1 AND date = (NOW() AT TIME ZONE 'UTC')::date AND source_window_days = 1", [req.params.id]);
+        const result = await database.query("SELECT id::text, topic, date::text, summary FROM topic_summaries WHERE id = $1 AND date = (NOW() AT TIME ZONE 'America/Los_Angeles')::date AND source_window_days = 1", [req.params.id]);
         const topic = result.rows[0];
         if (!topic) return res.status(404).send("Topic not found.");
         const articles = await database.query(`SELECT e.id::text, e.title, e.source AS publisher, e.publication_date, e.link, jsonb_path_query_array(CASE WHEN jsonb_typeof(e.images) = 'array' THEN e.images ELSE '[]'::jsonb END, '$[0 to 2]') AS images, e.topics, s.summary
             FROM entries e LEFT JOIN article_summaries s ON s.article_id = e.id
-            WHERE $1 = ANY(e.topics) AND (e.publication_date AT TIME ZONE 'UTC')::date = $2::date
-                AND e.publication_date >= (date_trunc('day', NOW() AT TIME ZONE 'UTC') AT TIME ZONE 'UTC') AND e.publication_date <= NOW()
+            WHERE $1 = ANY(e.topics) AND (e.publication_date AT TIME ZONE 'America/Los_Angeles')::date = $2::date
+                AND e.publication_date >= (date_trunc('day', NOW() AT TIME ZONE 'America/Los_Angeles') AT TIME ZONE 'America/Los_Angeles') AND e.publication_date <= NOW()
             ORDER BY e.publication_date DESC, e.id DESC`, [topic.topic, topic.date]);
         return res.render("topic.njk", {
             currentPage: "topic", topic,
@@ -49,7 +49,7 @@ function createPublicRouter(database) {
                 ...article, link: safeURL(article.link),
                 publishedAt: new Date(article.publication_date).toISOString(),
                 publishedLabel: new Intl.DateTimeFormat("en-US", {
-                    dateStyle: "medium", timeStyle: "short", timeZone: "UTC"
+                    dateStyle: "medium", timeStyle: "short", timeZone: "America/Los_Angeles"
                 }).format(new Date(article.publication_date)),
                 images: (Array.isArray(article.images) ? article.images : [])
                     .map((image) => safeURL(typeof image === "string" ? image : image?.url)).filter(Boolean)

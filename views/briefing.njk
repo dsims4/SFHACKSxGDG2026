@@ -31,7 +31,7 @@
         <div class="briefing-grid">
         {% for topic in topics %}
         <article class="briefing-card news-card">
-            <p class="briefing-date">{{ topic.date }} · UTC</p>
+            <p class="briefing-date">{{ topic.date }} · PT</p>
             <p class="topic-label">Topic</p>
             <h3><a href="/topic/{{ topic.id }}">{{ topic.topic | capitalize }} <span aria-hidden="true">↗</span></a></h3>
             <ul>

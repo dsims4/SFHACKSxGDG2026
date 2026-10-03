@@ -72,10 +72,10 @@ async function analyzePending(client, generateText, model, signal) {
     }
 
     const groups = await client.query(`
-        SELECT membership.topic, (NOW() AT TIME ZONE 'UTC')::date::text AS date
+        SELECT membership.topic, (NOW() AT TIME ZONE 'America/Los_Angeles')::date::text AS date
         FROM entries e JOIN article_summaries s ON s.article_id = e.id
         CROSS JOIN LATERAL unnest(e.topics) AS membership(topic)
-        WHERE e.publication_date >= (date_trunc('day', NOW() AT TIME ZONE 'UTC') AT TIME ZONE 'UTC') AND e.publication_date <= NOW()
+        WHERE e.publication_date >= (date_trunc('day', NOW() AT TIME ZONE 'America/Los_Angeles') AT TIME ZONE 'America/Los_Angeles') AND e.publication_date <= NOW()
             AND s.content_hash = md5(e.content)
         GROUP BY membership.topic
         ORDER BY date DESC, membership.topic
@@ -89,14 +89,14 @@ async function analyzePending(client, generateText, model, signal) {
         `, [group.topic, group.date]);
         const sources = await client.query(`
             SELECT e.id::text, s.summary FROM entries e JOIN article_summaries s ON s.article_id = e.id
-            WHERE $1 = ANY(e.topics) AND (e.publication_date AT TIME ZONE 'UTC')::date = $2::date
-                AND e.publication_date >= (date_trunc('day', NOW() AT TIME ZONE 'UTC') AT TIME ZONE 'UTC') AND e.publication_date <= NOW()
+            WHERE $1 = ANY(e.topics) AND (e.publication_date AT TIME ZONE 'America/Los_Angeles')::date = $2::date
+                AND e.publication_date >= (date_trunc('day', NOW() AT TIME ZONE 'America/Los_Angeles') AT TIME ZONE 'America/Los_Angeles') AND e.publication_date <= NOW()
                 AND s.content_hash = md5(e.content)
             ORDER BY e.publication_date DESC, e.id DESC LIMIT 100
         `, [group.topic, group.date]);
         if (!sources.rows.length) continue;
         const payload = JSON.stringify(sources.rows);
-        const fingerprint = hash("today-v4:" + payload);
+        const fingerprint = hash("today-pacific-v5:" + payload);
         const existing = await client.query("SELECT source_hash FROM topic_summaries WHERE topic = $1 AND date = $2", [group.topic, group.date]);
         if (existing.rows[0]?.source_hash === fingerprint) continue;
         try {
